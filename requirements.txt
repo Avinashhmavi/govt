@@ -1,0 +1,8 @@
+Flask
+pandas
+gTTS
+openai
+werkzeug
+python-dotenv
+gunicorn
+flask-cors
