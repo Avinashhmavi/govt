@@ -785,6 +785,8 @@ def search():
             (df["पद"].astype(str).str.contains(query, case=False, na=False)) |
             (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(query, case=False, na=False))
         ]
+        # Exclude 'मोबाईल क्रमांक' from the output
+        filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
         
         if not filtered_data.empty:
             result = "\n".join(
