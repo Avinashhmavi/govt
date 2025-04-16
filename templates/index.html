@@ -24,64 +24,115 @@
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             text-align: center;
             width: 400px;
+            border: 1px solid #ccc;
         }
-        .logo {
+        .logo-header {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .logo-header img.main-logo {
+            width: 100px;
+            margin-bottom: 10px;
+        }
+        .logo-header .side-logos {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        .logo-header .side-logos img {
+            width: 120px;
+        }
+        .title {
+            color: #000;
             margin-bottom: 20px;
         }
-        .logo img {
+        .title h1 {
+            font-size: 18px;
+            margin: 0;
+        }
+        .title p {
+            font-size: 14px;
+            margin: 5px 0 0;
+        }
+        .admin-login {
+            background-color: #90ee90;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
             width: 150px;
-        }
-        h2 {
-            color: #FF8C69;
             margin-bottom: 20px;
+            font-size: 16px;
+        }
+        .login-form {
+            display: none;
+        }
+        .login-form.active {
+            display: block;
         }
         .input-group {
             margin-bottom: 15px;
-        }
-        .input-group label {
-            display: block;
             text-align: left;
-            margin-bottom: 5px;
-            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .input-group img {
+            width: 20px;
+            margin-right: 10px;
         }
         .input-group input {
-            width: 100%;
+            flex: 1;
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 5px;
             box-sizing: border-box;
+            font-size: 14px;
         }
-        button {
+        button[type="submit"] {
             background-color: #90ee90;
             color: white;
             padding: 10px 20px;
             border: none;
-            border-radius: 5px;
+            border-radius: 20px;
             cursor: pointer;
-            width: 100%;
+            width: 100px;
+            font-size: 16px;
         }
-        button:hover {
+        button[type="submit"]:hover {
             background-color: #6bb76c;
         }
         .error {
             color: red;
             margin-top: 10px;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="logo">
-            <img src="{{ url_for('static', filename='gov_logo.jpg') }}" alt="सरकारी लोगो" id="govLogo">
+        <div class="logo-header">
+            <img src="{{ url_for('static', filename='gov_logo.jpg') }}" alt="सरकारी लोगो" class="main-logo">
+            <div class="title">
+                <h1>महाराष्ट्र शासन</h1>
+                <p>विभागीय आयुक्त, कोकण</p>
+                <p>AI Receptionist</p>
+                <p>Divisional Commissioner - Konkan Division</p>
+                <p>Government Of Maharashtra</p>
+            </div>
+            <div class="side-logos">
+                <img src="{{ url_for('static', filename='konkan.jpg') }}" alt="कोकण लोगो">
+                <img src="{{ url_for('static', filename='symbol.jpg') }}" alt="चिन्ह">
+            </div>
         </div>
         <h2>प्रशासक प्रवेश</h2>
         <form id="loginForm" method="POST" action="/">
             <div class="input-group">
-                <label for="userId">वापरकर्ता ID</label>
+                <label for="userId">वापरकर्ता ID : </label>
                 <input type="text" id="userId" name="userId" value="admin" readonly>
             </div>
             <div class="input-group">
-                <label for="password">पासवर्ड</label>
+                <label for="password">पासवर्ड : </label>
                 <input type="password" id="password" name="password" required>
             </div>
             <button type="submit">प्रवेश करा</button>
