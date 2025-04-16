@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="robots" content="noindex, nofollow">
+    <title>कोकण भवन कार्यालय निर्देशिका</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9e79f;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .logo {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .logo img {
+            width: 100px;
+        }
+        h2 {
+            color: #FF8C69;
+            text-align: center;
+        }
+        .tabs {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .tab-button {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #ddd;
+            border: none;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab-button.active {
+            background-color: #90ee90;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        select, button {
+            padding: 10px;
+            margin: 5px 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .result {
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+        .floor-plan {
+            margin-top: 10px;
+        }
+        .status {
+            color: blue;
+            margin-top: 10px;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='konkan.jpg') }}" alt="कोकण लोगो">
+            <h2>कोकण भवन कार्यालय निर्देशिका</h2>
+            <img src="{{ url_for('static', filename='symbol.jpg') }}" alt="चिन्ह">
+        </div>
+        <div class="tabs">
+            <button class="tab-button active" onclick="openTab('department')">पदानुसार</button>
+            <button class="tab-button" onclick="openTab('person')">नावानुसार</button>
+            <button class="tab-button" onclick="openTab('voice')">व्हॉइस इनपुट</button>
+        </div>
+
+        <div id="department" class="tab-content active">
+            <select id="departmentSelect">
+                <option value="">पद निवडा</option>
+                {% for dept in departments %}
+                    <option value="{{ dept }}">{{ dept }}</option>
+                {% endfor %}
+            </select>
+            <button onclick="searchByDepartment()">शोधा</button>
+            <div id="departmentResult" class="result"></div>
+            <div id="departmentStatus" class="status"></div>
+            <audio id="departmentAudio" controls></audio>
+        </div>
+
+        <div id="person" class="tab-content">
+            <select id="personSelect">
+                <option value="">व्यक्ती निवडा</option>
+                {% for person in people %}
+                    <option value="{{ person }}">{{ person }}</option>
+                {% endfor %}
+            </select>
+            <button onclick="searchByPerson()">शोधा</button>
+            <div id="personResult" class="result"></div>
+            <div id="personStatus" class="status"></div>
+            <audio id="personAudio" controls></audio>
+        </div>
+
+        <div id="voice" class="tab-content">
+            <button onclick="startVoiceInput()">व्हॉइस इनपुट सुरू करा</button>
+            <div id="voiceResult" class="result"></div>
+            <div id="voiceStatus" class="status"></div>
+            <audio id="voiceAudio" controls></audio>
+        </div>
+    </div>
+
+    <script>
+        let recognition = null;
+        let timeoutIds = {};
+        let isProcessing = {};
+
+        function openTab(tabName) {
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelector(`[onclick="openTab('${tabName}')"]`).classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        async function searchByDepartment() {
+            const dept = document.getElementById('departmentSelect').value;
+            if (dept && !isProcessing['department']) {
+                isProcessing['department'] = true;
+                document.getElementById('departmentStatus').innerHTML = 'प्रक्रिया चालू आहे';
+                try {
+                    const response = await fetch('/api/search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: dept })
+                    });
+                    const data = await response.json();
+                    if (data.error) {
+                        document.getElementById('departmentResult').innerHTML = `<div class="error">${data.error}</div>`;
+                    } else {
+                        displayResultAndFloorPlans(data.result, 'departmentResult', data.audio, 'departmentAudio');
+                    }
+                } catch (error) {
+                    document.getElementById('departmentResult').innerHTML = `<div class="error">त्रुटी: ${error.message}</div>`;
+                }
+                document.getElementById('departmentStatus').innerHTML = '';
+                isProcessing['department'] = false;
+                startTimeout('department');
+            }
+        }
+
+        async function searchByPerson() {
+            const person = document.getElementById('personSelect').value;
+            if (person && !isProcessing['person']) {
+                isProcessing['person'] = true;
+                document.getElementById('personStatus').innerHTML = 'प्रक्रिया चालू आहे';
+                try {
+                    const response = await fetch('/api/search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: person })
+                    });
+                    const data = await response.json();
+                    if (data.error) {
+                        document.getElementById('personResult').innerHTML = `<div class="error">${data.error}</div>`;
+                    } else {
+                        displayResultAndFloorPlans(data.result, 'personResult', data.audio, 'personAudio');
+                    }
+                } catch (error) {
+                    document.getElementById('personResult').innerHTML = `<div class="error">त्रुटी: ${error.message}</div>`;
+                }
+                document.getElementById('personStatus').innerHTML = '';
+                isProcessing['person'] = false;
+                startTimeout('person');
+            }
+        }
+
+        async function startVoiceInput() {
+            if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+                document.getElementById('voiceResult').innerHTML = "<div class='error'>व्हॉइस इनपुट हे ब्राउझरमध्ये समर्थित नाही.</div>";
+                return;
+            }
+            if (recognition && recognition.state === 'running') {
+                recognition.stop();
+                return;
+            }
+            if (!isProcessing['voice']) {
+                isProcessing['voice'] = true;
+                document.getElementById('voiceStatus').innerHTML = 'ऐकत आहे';
+                try {
+                    recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                    recognition.lang = 'mr-IN';
+                    recognition.onresult = async (event) => {
+                        const query = event.results[0][0].transcript;
+                        console.log('Recognized query:', query);
+                        try {
+                            const response = await fetch('/api/search', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ query: query })
+                            });
+                            const data = await response.json();
+                            if (data.error) {
+                                document.getElementById('voiceResult').innerHTML = `<div class="error">${data.error}</div>`;
+                            } else {
+                                displayResultAndFloorPlans(data.result, 'voiceResult', data.audio, 'voiceAudio');
+                            }
+                        } catch (error) {
+                            document.getElementById('voiceResult').innerHTML = `<div class="error">त्रुटी: ${error.message}</div>`;
+                        }
+                        document.getElementById('voiceStatus').innerHTML = '';
+                        isProcessing['voice'] = false;
+                        startTimeout('voice');
+                    };
+                    recognition.onerror = (event) => {
+                        if (event.error === 'not-allowed') {
+                            document.getElementById('voiceResult').innerHTML = "<div class='error'>मायक्रोफोन परवानगी आवश्यक आहे. सेटिंग्जमध्ये परवानगी द्या आणि पुन्हा प्रयत्न करा.</div>";
+                        } else {
+                            document.getElementById('voiceResult').innerHTML = `<div class="error">व्हॉइस इनपुटमध्ये त्रुटी: ${event.error}</div>`;
+                        }
+                        document.getElementById('voiceStatus').innerHTML = '';
+                        isProcessing['voice'] = false;
+                    };
+                    recognition.start();
+                } catch (error) {
+                    document.getElementById('voiceResult').innerHTML = `<div class="error">व्हॉइस इनपुट सुरू करताना त्रुटी: ${error.message}</div>`;
+                    document.getElementById('voiceStatus').innerHTML = '';
+                    isProcessing['voice'] = false;
+                }
+            }
+        }
+
+        function displayResultAndFloorPlans(text, resultId, audioData, audioId) {
+            const resultDiv = document.getElementById(resultId);
+            resultDiv.innerHTML = ''; // Clear previous content
+            const lines = text.split('\n');
+            let floors = [];
+            let content = '';
+
+            for (let line of lines) {
+                if (line.startsWith('- मजला:')) {
+                    const floor = line.split(':')[1].trim();
+                    floors.push(floor);
+                } else {
+                    content += line + '\n';
+                }
+            }
+
+            floors.forEach(floor => {
+                let floorEn = floor === 'तळ मजला' ? 'ground' : floor.replace('मजला', '').trim();
+                if (floorEn === 'पहिला') floorEn = 'first';
+                else if (floorEn === 'दुसरा') floorEn = 'second';
+                else if (floorEn === 'तिसरा') floorEn = 'third';
+                else if (floorEn === 'चौथा') floorEn = 'fourth';
+                else if (floorEn === 'पाचवा') floorEn = 'fifth';
+                else if (floorEn === 'सहावा') floorEn = 'sixth';
+                else if (floorEn === 'सातवा') floorEn = 'seventh';
+
+                const img = document.createElement('img');
+                img.src = `{{ url_for('static', filename='floor_plans/') }}${floorEn}_floor.jpg`;
+                img.alt = `${floorEn} मजल्याचा नकाशा`;
+                img.style.width = '100%';
+                img.style.marginTop = '10px';
+                img.onerror = () => {
+                    console.error(`Floor plan not found: ${floorEn}_floor.jpg. Using default.`);
+                    img.src = `{{ url_for('static', filename='floor_plans/default.jpg') }}`;
+                };
+
+                resultDiv.appendChild(img);
+                resultDiv.appendChild(document.createElement('br'));
+            });
+
+            const textNode = document.createElement('div');
+            textNode.innerText = content.trim();
+            resultDiv.appendChild(textNode);
+
+            // Play audio
+            const audio = document.getElementById(audioId);
+            audio.src = `data:audio/mp3;base64,${audioData}`;
+            audio.play().catch(error => console.error('Audio play failed:', error));
+        }
+
+        function startTimeout(section) {
+            clearTimeout(timeoutIds[section]); // Clear any existing timeout
+            timeoutIds[section] = setTimeout(() => {
+                const resultId = section === 'department' ? 'departmentResult' : section === 'person' ? 'personResult' : 'voiceResult';
+                document.getElementById(resultId).innerHTML = '';
+                if (recognition && section === 'voice') {
+                    recognition.stop();
+                }
+            }, 30000); // 20 seconds
+        }
+    </script>
+</body>
+</html>
