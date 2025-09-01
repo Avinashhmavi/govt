@@ -6,149 +6,546 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="robots" content="noindex, nofollow">
     <title>कोकण भवन कार्यालय निर्देशिका</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color:rgb(208, 176, 236);
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
         }
-        .container {
-            max-width: 800px;
-            margin: 20px auto;
-            background-color: white;
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(11, 4, 6, 0.1);
+            position: relative;
+            overflow-x: hidden;
         }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="50" cy="10" r="0.5" fill="rgba(255,255,255,0.1)"/><circle cx="10" cy="60" r="0.5" fill="rgba(255,255,255,0.1)"/><circle cx="90" cy="40" r="0.5" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            padding: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            z-index: 1;
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 24px;
+            border-bottom: 2px solid #e2e8f0;
+            position: relative;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 2px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 1px;
+        }
+
         .logo {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
+            gap: 20px;
         }
+
         .logo img {
-            width: 200px;
+            width: 160px;
+            height: auto;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+            transition: transform 0.3s ease;
         }
-        h2 {
-            color: #FF8C69;
+
+        .logo img:hover {
+            transform: scale(1.05);
+        }
+
+        .logo h2 {
+            color: #2d3748;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            flex: 1;
             text-align: center;
         }
+
         .tabs {
             display: flex;
-            justify-content: space-around;
-            margin-bottom: 20px;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 32px;
+            background: #f7fafc;
+            padding: 8px;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
         }
+
         .tab-button {
-            padding: 10px 20px;
+            padding: 16px 24px;
             cursor: pointer;
-            background-color: #ddd;
+            background: transparent;
             border: none;
-            border-radius: 5px 5px 0 0;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            font-family: inherit;
+            color: #4a5568;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
-        .tab-button.active {
-            background-color:rgb(16, 177, 16);
+
+        .tab-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: -1;
+        }
+
+        .tab-button:hover::before {
+            opacity: 1;
+        }
+
+        .tab-button:hover {
             color: white;
+            transform: translateY(-2px);
         }
+
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
         .tab-content {
             display: none;
+            animation: fadeIn 0.3s ease-in;
         }
+
         .tab-content.active {
             display: block;
         }
-        select, button {
-            padding: 10px;
-            margin: 5px 0;
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .search-section {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .search-section h3 {
+            color: #2d3748;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        select {
             width: 100%;
-            box-sizing: border-box;
+            padding: 16px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            font-family: inherit;
+            background: white;
+            color: #2d3748;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
         }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .search-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .search-btn:hover::before {
+            left: 100%;
+        }
+
+        .search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .search-btn:active {
+            transform: translateY(0);
+        }
+
+        .search-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         .result {
-            margin-top: 20px;
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 24px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             white-space: pre-wrap;
+            font-family: 'Inter', monospace;
+            line-height: 1.6;
+            color: #2d3748;
         }
-        .floor-plan {
-            margin-top: 10px;
-        }
+
         .status {
-            color: blue;
-            margin-top: 10px;
+            color: #3182ce;
+            margin-top: 16px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            padding: 12px;
+            background: #ebf8ff;
+            border-radius: 8px;
+            border: 1px solid #bee3f8;
         }
+
         .error {
-            color: red;
-            margin-top: 10px;
+            color: #c53030;
+            margin-top: 16px;
+            font-size: 14px;
+            text-align: center;
+            padding: 12px;
+            background: #fed7d7;
+            border-radius: 8px;
+            border: 1px solid #feb2b2;
         }
+
+        .floor-plan {
+            margin-top: 16px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .floor-plan img {
+            width: 100%;
+            height: auto;
+            display: block;
+            transition: transform 0.3s ease;
+        }
+
+        .floor-plan img:hover {
+            transform: scale(1.02);
+        }
+
         audio {
             width: 100%;
-            margin-top: 10px;
+            margin-top: 16px;
+            border-radius: 8px;
         }
+
         .footer-images {
             display: flex;
             justify-content: center;
-            gap: 20px;
-            margin-top: 20px;
+            gap: 24px;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e2e8f0;
         }
+
         .footer-images img {
-            width: 100px;
+            width: 80px;
             height: auto;
+            filter: grayscale(20%);
+            transition: all 0.3s ease;
         }
+
+        .footer-images img:hover {
+            filter: grayscale(0%);
+            transform: scale(1.05);
+        }
+
         .disclaimer {
-            margin-top: 10px;
+            margin-top: 16px;
             font-size: 12px;
-            color: #333;
+            color: #718096;
             text-align: center;
+            line-height: 1.4;
+            font-style: italic;
+        }
+
+        /* Voice input specific styles */
+        .voice-section {
+            text-align: center;
+        }
+
+        .voice-btn {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+            padding: 20px 32px;
+            border: none;
+            border-radius: 16px;
+            font-size: 18px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .voice-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .voice-btn:hover::before {
+            left: 100%;
+        }
+
+        .voice-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(72, 187, 120, 0.3);
+        }
+
+        .voice-btn.listening {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .voice-icon {
+            font-size: 24px;
+        }
+
+        /* Loading animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 24px;
+                margin: 16px;
+            }
+
+            .logo {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .logo img {
+                width: 120px;
+            }
+
+            .logo h2 {
+                font-size: 24px;
+            }
+
+            .tabs {
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            .tab-button {
+                padding: 14px 20px;
+                font-size: 15px;
+            }
+
+            .search-section {
+                padding: 24px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+            }
+
+            .logo h2 {
+                font-size: 20px;
+            }
+
+            .search-section {
+                padding: 20px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="logo">
-            <img src="{{ url_for('static', filename='konkan.jpg') }}" alt="कोकण लोगो">
-            <h2>कोकण भवन कार्यालय निर्देशिका</h2>
-            <img src="{{ url_for('static', filename='symbol.jpg') }}" alt="चिन्ह">
+        <div class="header">
+            <div class="logo">
+                <img src="{{ url_for('static', filename='konkan.jpg') }}" alt="कोकण लोगो">
+                <h2>कोकण भवन कार्यालय निर्देशिका</h2>
+                <img src="{{ url_for('static', filename='symbol.jpg') }}" alt="चिन्ह">
+            </div>
         </div>
+
         <div class="tabs">
-            <button class="tab-button active" onclick="openTab('department')">पदानुसार</button>
-            <button class="tab-button" onclick="openTab('person')">नावानुसार</button>
-            <button class="tab-button" onclick="openTab('voice')">व्हॉइस इनपुट</button>
+            <button class="tab-button active" onclick="openTab('department')">
+                <span>🏢</span> पदानुसार
+            </button>
+            <button class="tab-button" onclick="openTab('person')">
+                <span>👤</span> नावानुसार
+            </button>
+            <button class="tab-button" onclick="openTab('voice')">
+                <span>🎤</span> व्हॉइस इनपुट
+            </button>
         </div>
 
         <div id="department" class="tab-content active">
-            <select id="departmentSelect">
-                <option value="">पद निवडा</option>
-                {% for dept in departments %}
-                    <option value="{{ dept }}">{{ dept }}</option>
-                {% endfor %}
-            </select>
-            <button onclick="searchByDepartment()">शोध</button>
-            <div id="departmentResult" class="result"></div>
-            <div id="departmentStatus" class="status"></div>
-            <audio id="departmentAudio" controls></audio>
+            <div class="search-section">
+                <h3>पदानुसार शोध</h3>
+                <select id="departmentSelect">
+                    <option value="">पद निवडा</option>
+                    {% for dept in departments %}
+                        <option value="{{ dept }}">{{ dept }}</option>
+                    {% endfor %}
+                </select>
+                <button class="search-btn" onclick="searchByDepartment()">
+                    <span>🔍</span> शोध करा
+                </button>
+            </div>
+            <div id="departmentResult" class="result" style="display: none;"></div>
+            <div id="departmentStatus" class="status" style="display: none;"></div>
+            <audio id="departmentAudio" controls style="display: none;"></audio>
         </div>
 
         <div id="person" class="tab-content">
-            <select id="personSelect">
-                <option value="">व्यक्ती निवडा</option>
-                {% for person in people %}
-                    <option value="{{ person }}">{{ person }}</option>
-                {% endfor %}
-            </select>
-            <button onclick="searchByPerson()">शोध</button>
-            <div id="personResult" class="result"></div>
-            <div id="personStatus" class="status"></div>
-            <audio id="personAudio" controls></audio>
+            <div class="search-section">
+                <h3>नावानुसार शोध</h3>
+                <select id="personSelect">
+                    <option value="">व्यक्ती निवडा</option>
+                    {% for person in people %}
+                        <option value="{{ person }}">{{ person }}</option>
+                    {% endfor %}
+                </select>
+                <button class="search-btn" onclick="searchByPerson()">
+                    <span>🔍</span> शोध करा
+                </button>
+            </div>
+            <div id="personResult" class="result" style="display: none;"></div>
+            <div id="personStatus" class="status" style="display: none;"></div>
+            <audio id="personAudio" controls style="display: none;"></audio>
         </div>
 
         <div id="voice" class="tab-content">
-            <button onclick="startVoiceInput()">व्हॉइस इनपुट सुरू करा</button>
-            <div id="voiceResult" class="result"></div>
-            <div id="voiceStatus" class="status"></div>
-            <audio id="voiceAudio" controls></audio>
+            <div class="search-section voice-section">
+                <h3>व्हॉइस इनपुट</h3>
+                <button class="voice-btn" onclick="startVoiceInput()" id="voiceBtn">
+                    <span class="voice-icon">🎤</span>
+                    <span>व्हॉइस इनपुट सुरू करा</span>
+                </button>
+            </div>
+            <div id="voiceResult" class="result" style="display: none;"></div>
+            <div id="voiceStatus" class="status" style="display: none;"></div>
+            <audio id="voiceAudio" controls style="display: none;"></audio>
         </div>
 
         <div class="footer-images">
             <img src="{{ url_for('static', filename='dep.jpg') }}" alt="Department Logo">
             <img src="{{ url_for('static', filename='vija.png') }}" alt="Vijaybhoomi Logo">
         </div>
+        
         <div class="disclaimer">
             Disclaimer: All rights reserved with Center for Research and Development, Vijaybhoomi University.
         </div>
@@ -160,180 +557,287 @@
         let isProcessing = {};
 
         function openTab(tabName) {
+            // Remove active class from all tabs and content
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Add active class to selected tab and content
             document.querySelector(`[onclick="openTab('${tabName}')"]`).classList.add('active');
             document.getElementById(tabName).classList.add('active');
+            
+            // Clear all results when switching tabs
+            clearAllResults();
+        }
+
+        function clearAllResults() {
+            ['department', 'person', 'voice'].forEach(section => {
+                document.getElementById(`${section}Result`).style.display = 'none';
+                document.getElementById(`${section}Status`).style.display = 'none';
+                document.getElementById(`${section}Audio`).style.display = 'none';
+            });
+        }
+
+        function showResult(section, result, audioData, roomImagePath) {
+            const resultDiv = document.getElementById(`${section}Result`);
+            const statusDiv = document.getElementById(`${section}Status`);
+            const audioElement = document.getElementById(`${section}Audio`);
+            
+            // Clear previous content
+            resultDiv.innerHTML = '';
+            
+            // Display result
+            if (result) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = formatResult(result, roomImagePath);
+            }
+            
+            // Display audio if available
+            if (audioData) {
+                audioElement.style.display = 'block';
+                audioElement.src = `data:audio/mp3;base64,${audioData}`;
+                audioElement.play().catch(error => console.error('Audio play failed:', error));
+            }
+            
+            // Hide status
+            statusDiv.style.display = 'none';
+        }
+
+        function showStatus(section, message) {
+            const statusDiv = document.getElementById(`${section}Status`);
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+        }
+
+        function showError(section, error) {
+            const resultDiv = document.getElementById(`${section}Result`);
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<div class="error">${error}</div>`;
+        }
+
+        function formatResult(text, roomImagePath) {
+            let content = '';
+            let images = '';
+            
+            // Process text content
+            const lines = text.split('\n');
+            for (let line of lines) {
+                if (line.startsWith('- मजला:')) {
+                    // Skip floor information for now
+                    continue;
+                } else {
+                    content += line + '\n';
+                }
+            }
+            
+            // Process room images
+            if (roomImagePath && Array.isArray(roomImagePath) && roomImagePath.length > 0) {
+                images += '<div style="margin-top: 20px;"><h4 style="color: #667eea; margin-bottom: 16px;">🏢 रूम नकाशे:</h4>';
+                
+                roomImagePath.forEach((imagePath, index) => {
+                    const imageUrl = imagePath.replace('static/', '{{ url_for("static", filename="") }}');
+                    const fileName = imagePath.split('/').pop().replace('.jpg', '');
+                    
+                    images += `
+                        <div style="margin-bottom: 20px; text-align: center;">
+                            <div style="font-weight: 600; color: #2d3748; margin-bottom: 8px;">रूम: ${fileName}</div>
+                            <img src="${imageUrl}" alt="रूम नकाशा ${index + 1}" style="width: 100%; max-width: 400px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                        </div>
+                    `;
+                });
+                
+                images += '</div>';
+            }
+            
+            return content.trim() + images;
         }
 
         async function searchByDepartment() {
             const dept = document.getElementById('departmentSelect').value;
-            if (dept && !isProcessing['department']) {
-                isProcessing['department'] = true;
-                document.getElementById('departmentStatus').innerHTML = 'प्रक्रिया चालू आहे';
-                try {
-                    const response = await fetch('/api/search', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ query: dept })
-                    });
-                    const data = await response.json();
-                    if (data.error) {
-                        document.getElementById('departmentResult').innerHTML = `<div class="error">${data.error}</div>`;
-                    } else {
-                        displayResultAndFloorPlans(data.result, 'departmentResult', data.audio, 'departmentAudio');
-                    }
-                } catch (error) {
-                    document.getElementById('departmentResult').innerHTML = `<div class="error">त्रुटी: ${error.message}</div>`;
+            if (!dept) {
+                showError('department', 'कृपया पद निवडा');
+                return;
+            }
+            
+            if (isProcessing['department']) return;
+            
+            isProcessing['department'] = true;
+            const searchBtn = document.querySelector('#department .search-btn');
+            const originalText = searchBtn.innerHTML;
+            
+            searchBtn.innerHTML = '<span class="loading"></span> शोधत आहे...';
+            searchBtn.disabled = true;
+            showStatus('department', 'प्रक्रिया चालू आहे...');
+            
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: dept })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError('department', data.error);
+                } else {
+                    showResult('department', data.result, data.audio, data.room_image);
                 }
-                document.getElementById('departmentStatus').innerHTML = '';
+            } catch (error) {
+                showError('department', `त्रुटी: ${error.message}`);
+            } finally {
                 isProcessing['department'] = false;
+                searchBtn.innerHTML = originalText;
+                searchBtn.disabled = false;
                 startTimeout('department');
             }
         }
 
         async function searchByPerson() {
             const person = document.getElementById('personSelect').value;
-            if (person && !isProcessing['person']) {
-                isProcessing['person'] = true;
-                document.getElementById('personStatus').innerHTML = 'प्रक्रिया चालू आहे';
-                try {
-                    const response = await fetch('/api/search', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ query: person })
-                    });
-                    const data = await response.json();
-                    if (data.error) {
-                        document.getElementById('personResult').innerHTML = `<div class="error">${data.error}</div>`;
-                    } else {
-                        displayResultAndFloorPlans(data.result, 'personResult', data.audio, 'personAudio');
-                    }
-                } catch (error) {
-                    document.getElementById('personResult').innerHTML = `<div class="error">त्रुटी: ${error.message}</div>`;
+            if (!person) {
+                showError('person', 'कृपया व्यक्ती निवडा');
+                return;
+            }
+            
+            if (isProcessing['person']) return;
+            
+            isProcessing['person'] = true;
+            const searchBtn = document.querySelector('#person .search-btn');
+            const originalText = searchBtn.innerHTML;
+            
+            searchBtn.innerHTML = '<span class="loading"></span> शोधत आहे...';
+            searchBtn.disabled = true;
+            showStatus('person', 'प्रक्रिया चालू आहे...');
+            
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: person })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError('person', data.error);
+                } else {
+                    showResult('person', data.result, data.audio, data.room_image);
                 }
-                document.getElementById('personStatus').innerHTML = '';
+            } catch (error) {
+                showError('person', `त्रुटी: ${error.message}`);
+            } finally {
                 isProcessing['person'] = false;
+                searchBtn.innerHTML = originalText;
+                searchBtn.disabled = false;
                 startTimeout('person');
             }
         }
 
         async function startVoiceInput() {
             if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
-                document.getElementById('voiceResult').innerHTML = "<div class='error'>व्हॉइस इनपुट हे ब्राउझरमध्ये समर्थित नाही.</div>";
+                showError('voice', 'व्हॉइस इनपुट हे ब्राउझरमध्ये समर्थित नाही.');
                 return;
             }
+            
             if (recognition && recognition.state === 'running') {
                 recognition.stop();
                 return;
             }
-            if (!isProcessing['voice']) {
-                isProcessing['voice'] = true;
-                document.getElementById('voiceStatus').innerHTML = 'ऐकत आहे';
-                try {
-                    recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-                    recognition.lang = 'mr-IN';
-                    recognition.onresult = async (event) => {
-                        const query = event.results[0][0].transcript;
-                        console.log('Recognized query:', query);
-                        try {
-                            const response = await fetch('/api/search', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ query: query })
-                            });
-                            const data = await response.json();
-                            if (data.error) {
-                                document.getElementById('voiceResult').innerHTML = `<div class="error">${data.error}</div>`;
-                            } else {
-                                displayResultAndFloorPlans(data.result, 'voiceResult', data.audio, 'voiceAudio');
-                            }
-                        } catch (error) {
-                            document.getElementById('voiceResult').innerHTML = `<div class="error">त्रुटी: ${error.message}</div>`;
-                        }
-                        document.getElementById('voiceStatus').innerHTML = '';
-                        isProcessing['voice'] = false;
-                        startTimeout('voice');
-                    };
-                    recognition.onerror = (event) => {
-                        if (event.error === 'not-allowed') {
-                            document.getElementById('voiceResult').innerHTML = "<div class='error'>मायक्रोफोन परवानगी आवश्यक आहे. सेटिंग्जमध्ये परवानगी द्या आणि पुन्हा प्रयत्न करा.</div>";
+            
+            if (isProcessing['voice']) return;
+            
+            isProcessing['voice'] = true;
+            const voiceBtn = document.getElementById('voiceBtn');
+            const originalText = voiceBtn.innerHTML;
+            
+            voiceBtn.innerHTML = '<span class="voice-icon">🔴</span><span>ऐकत आहे...</span>';
+            voiceBtn.classList.add('listening');
+            showStatus('voice', 'ऐकत आहे...');
+            
+            try {
+                recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.lang = 'mr-IN';
+                
+                recognition.onresult = async (event) => {
+                    const query = event.results[0][0].transcript;
+                    console.log('Recognized query:', query);
+                    
+                    try {
+                        const response = await fetch('/api/search', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ query: query })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.error) {
+                            showError('voice', data.error);
                         } else {
-                            document.getElementById('voiceResult').innerHTML = `<div class="error">व्हॉइस इनपुटमध्ये त्रुटी: ${event.error}</div>`;
+                            showResult('voice', data.result, data.audio, data.room_image);
                         }
-                        document.getElementById('voiceStatus').innerHTML = '';
+                    } catch (error) {
+                        showError('voice', `त्रुटी: ${error.message}`);
+                    } finally {
                         isProcessing['voice'] = false;
-                    };
-                    recognition.start();
-                } catch (error) {
-                    document.getElementById('voiceResult').innerHTML = `<div class="error">व्हॉइस इनपुट सुरू करताना त्रुटी: ${error.message}</div>`;
-                    document.getElementById('voiceStatus').innerHTML = '';
-                    isProcessing['voice'] = false;
-                }
-            }
-        }
-
-        function displayResultAndFloorPlans(text, resultId, audioData, audioId) {
-            const resultDiv = document.getElementById(resultId);
-            resultDiv.innerHTML = ''; // Clear previous content
-            const lines = text.split('\n');
-            let floors = [];
-            let content = '';
-
-            for (let line of lines) {
-                if (line.startsWith('- मजला:')) {
-                    const floor = line.split(':')[1].trim();
-                    floors.push(floor);
-                } else {
-                    content += line + '\n';
-                }
-            }
-
-            floors.forEach(floor => {
-                let floorEn = floor === 'तळ मजला' ? 'ground' : floor.replace('मजला', '').trim();
-                if (floorEn === 'पहिला') floorEn = 'first';
-                else if (floorEn === 'दुसरा') floorEn = 'second';
-                else if (floorEn === 'तिसरा') floorEn = 'third';
-                else if (floorEn === 'चौथा') floorEn = 'fourth';
-                else if (floorEn === 'पाचवा') floorEn = 'fifth';
-                else if (floorEn === 'सहावा') floorEn = 'sixth';
-                else if (floorEn === 'सातवा') floorEn = 'seventh';
-
-                const img = document.createElement('img');
-                img.src = `{{ url_for('static', filename='floor_plans/') }}${floorEn}_floor.jpg`;
-                img.alt = `${floorEn} मजल्याचा नकाशा`;
-                img.style.width = '100%';
-                img.style.marginTop = '10px';
-                img.onerror = () => {
-                    console.error(`Floor plan not found: ${floorEn}_floor.jpg. Using default.`);
-                    img.src = `{{ url_for('static', filename='floor_plans/default.jpg') }}`;
+                        voiceBtn.innerHTML = originalText;
+                        voiceBtn.classList.remove('listening');
+                        startTimeout('voice');
+                    }
                 };
-
-                resultDiv.appendChild(img);
-                resultDiv.appendChild(document.createElement('br'));
-            });
-
-            const textNode = document.createElement('div');
-            textNode.innerText = content.trim();
-            resultDiv.appendChild(textNode);
-
-            // Play audio
-            const audio = document.getElementById(audioId);
-            audio.src = `data:audio/mp3;base64,${audioData}`;
-            audio.play().catch(error => console.error('Audio play failed:', error));
+                
+                recognition.onerror = (event) => {
+                    let errorMessage = '';
+                    if (event.error === 'not-allowed') {
+                        errorMessage = 'मायक्रोफोन परवानगी आवश्यक आहे. सेटिंग्जमध्ये परवानगी द्या आणि पुन्हा प्रयत्न करा.';
+                    } else {
+                        errorMessage = `व्हॉइस इनपुटमध्ये त्रुटी: ${event.error}`;
+                    }
+                    
+                    showError('voice', errorMessage);
+                    isProcessing['voice'] = false;
+                    voiceBtn.innerHTML = originalText;
+                    voiceBtn.classList.remove('listening');
+                };
+                
+                recognition.start();
+            } catch (error) {
+                showError('voice', `व्हॉइस इनपुट सुरू करताना त्रुटी: ${error.message}`);
+                isProcessing['voice'] = false;
+                voiceBtn.innerHTML = originalText;
+                voiceBtn.classList.remove('listening');
+            }
         }
 
         function startTimeout(section) {
-            clearTimeout(timeoutIds[section]); // Clear any existing timeout
+            clearTimeout(timeoutIds[section]);
             timeoutIds[section] = setTimeout(() => {
-                const resultId = section === 'department' ? 'departmentResult' : section === 'person' ? 'personResult' : 'voiceResult';
-                document.getElementById(resultId).innerHTML = '';
+                const resultId = `${section}Result`;
+                const statusId = `${section}Status`;
+                const audioId = `${section}Audio`;
+                
+                document.getElementById(resultId).style.display = 'none';
+                document.getElementById(statusId).style.display = 'none';
+                document.getElementById(audioId).style.display = 'none';
+                
                 if (recognition && section === 'voice') {
                     recognition.stop();
                 }
-            }, 30000); // 20 seconds
+            }, 30000); // 30 seconds
         }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add smooth transitions
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    this.style.transform = 'scale(0.95)';
+                    setTimeout(() => {
+                        this.style.transform = '';
+                    }, 150);
+                });
+            });
+        });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'934e19feec88d1b6',t:'MTc0NTQxOTA3NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>

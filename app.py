@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import base64
 from flask_cors import CORS
+import re
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +32,176 @@ floor_mapping = {
     "सहावा": "sixth",
     "सातवा": "seventh",
 }
+
+# Room number mapping for ground floor and first floor
+ground_floor_rooms = {
+    "जी-1": "G-1.jpg",
+    "जी-01": "G-1.jpg",
+    "जी-2": "G-2.jpg",
+    "जी-02": "G-2.jpg", 
+    "जी-4": "G-4.jpg",
+    "जी-04": "G-4.jpg",
+    "जी-5": "G-5.jpg",
+    "जी-05": "G-5.jpg",
+    "जी-6": "G-6.jpg",
+    "जी-06": "G-6.jpg",
+    "जी-7": "G-7.jpg",
+    "जी-07": "G-7.jpg",
+    "जी-8": "G-8.jpg",
+    "जी-08": "G-8.jpg",
+    "जी-8A": "G-8A.jpg",
+    "जी-08A": "G-8A.jpg",
+    "जी-9": "G-9.jpg",
+    "जी-09": "G-9.jpg",
+    "जी-10": "G-10.jpg",
+    "जी-11": "G-11.jpg",
+    "जी-12": "G-12.jpg",
+    "जी-13": "G-13.jpg",
+    "जी-14": "G-14.jpg",
+    "जी-15": "G-15.jpg",
+    "जी-16": "G-16.jpg",
+    "जी-17": "G-17.jpg",
+    "जी-18": "G-18.jpg",
+    "जी-19": "G-19.jpg",
+    "जी-20": "G-20.jpg",
+    "जी-21": "G-21.jpg",
+    "जी-22": "G-22.jpg",
+    "जी-23": "G-23.jpg",
+    "जी-24": "G-24.jpg",
+    "जी-25": "G-25.jpg",
+    "जी-27": "G-27.jpg",
+    "जी-28": "G-28.jpg",
+    "जी-29": "G-29.jpg",
+    "जी-29A": "G-29A.jpg"
+}
+
+first_floor_rooms = {
+    "101": "101.jpg",
+    "102": "102.jpg",
+    "103": "103.jpg",
+    "104": "104.jpg",
+    "105": "105.jpg",
+    "106": "106.jpg",
+    "107": "107.jpg",
+    "108": "108.jpg",
+    "109": "109.jpg",
+    "110": "110.jpg",
+    "111": "111.jpg",
+    "112": "112.jpg",
+    "113": "113.jpg",
+    "114": "114.jpg",
+    "115": "115.jpg",
+    "116": "116.jpg",
+    "117": "117.jpg",
+    "118": "118.jpg",
+    "119": "119.jpg",
+    "119-A": "119-A.jpg",
+    "119-B": "119-B.jpg",
+    "121": "121.jpg",
+    "122": "122.jpg",
+    "123": "123.jpg",
+    "124": "124.jpg"
+}
+
+def extract_room_number(office_number):
+    """Extract room numbers from office number field"""
+    if pd.isna(office_number) or not office_number:
+        return None
+    
+    office_str = str(office_number).strip()
+    room_numbers = []
+    
+    # Check for ground floor rooms (जी- pattern)
+    if "जी" in office_str:
+        # Handle specific patterns first
+        if '-' in office_str and not ('/' in office_str or ',' in office_str):
+            # Handle patterns like जी-14-15 (range) - with or without spaces
+            range_match = re.search(r'जी\s*[-]?\s*(\d+)\s*[-]\s*(\d+)', office_str)
+            if range_match:
+                start_num = int(range_match.group(1))
+                end_num = int(range_match.group(2))
+                for num in range(start_num, end_num + 1):
+                    room_numbers.append(f"जी-{num}")
+            else:
+                # Extract individual numbers
+                number_pattern = re.findall(r'(\d+[A-Z]?)', office_str)
+                for num in number_pattern:
+                    room_numbers.append(f"जी-{num}")
+        else:
+            # Handle patterns like जी-09/10, जी-1,2,3 etc.
+            if '/' in office_str or ',' in office_str or 'ते' in office_str:
+                number_pattern = re.findall(r'(\d+[A-Z]?)', office_str)
+                for num in number_pattern:
+                    room_numbers.append(f"जी-{num}")
+            else:
+                # Extract single number
+                match = re.search(r'जी\s*[-]?\s*(\d+[A-Z]?)', office_str)
+                if match:
+                    room_numbers.append(f"जी-{match.group(1)}")
+    
+    # Check for first floor rooms (रूम नं. pattern)
+    if "रूम नं" in office_str:
+        # Handle specific patterns first
+        if '-' in office_str and not ('/' in office_str or ',' in office_str):
+            # Handle patterns like रूम नं.-401 ते 406 (range)
+            range_match = re.search(r'(\d+)\s*ते\s*(\d+)', office_str)
+            if range_match:
+                start_num = int(range_match.group(1))
+                end_num = int(range_match.group(2))
+                for num in range(start_num, end_num + 1):
+                    room_numbers.append(str(num))
+            else:
+                # Extract individual numbers
+                number_pattern = re.findall(r'(\d+[A-Z]?)', office_str)
+                for num in number_pattern:
+                    room_numbers.append(num)
+        else:
+            # Handle patterns like रूम नं.-101/102, रूम नं. 101,102 etc.
+            if '/' in office_str or ',' in office_str:
+                number_pattern = re.findall(r'(\d+[A-Z]?)', office_str)
+                for num in number_pattern:
+                    room_numbers.append(num)
+            else:
+                # Extract single number
+                match = re.search(r'रूम\s*नं\.?\s*[-]?\s*(\d+[A-Z]?)', office_str)
+                if match:
+                    room_numbers.append(match.group(1))
+    
+    # Remove duplicates and return list
+    if room_numbers:
+        return list(set(room_numbers))
+    
+    return None
+
+def get_room_image(room_numbers, floor):
+    """Get the specific room image paths based on room numbers and floor"""
+    if not room_numbers:
+        return None
+    
+    # Convert single room number to list for consistency
+    if not isinstance(room_numbers, list):
+        room_numbers = [room_numbers]
+    
+    image_paths = []
+    
+    if floor == "तळ मजला" or floor == "तळ":
+        # Check if room numbers exist in ground floor mapping
+        for room_num in room_numbers:
+            for key, value in ground_floor_rooms.items():
+                if key == room_num:
+                    image_paths.append(f"static/floor_plans/Ground floor/{value}")
+                    break
+    
+    elif floor == "पहिला मजला" or floor == "पहिला":
+        # Check if room numbers exist in first floor mapping
+        for room_num in room_numbers:
+            for key, value in first_floor_rooms.items():
+                if key == room_num:
+                    image_paths.append(f"static/floor_plans/first floor/{value}")
+                    break
+    
+    # Return list of image paths, or None if no images found
+    return image_paths if image_paths else None
 
 # Common corrections for names
 name_corrections = {
@@ -779,7 +950,20 @@ def search():
         # Exclude 'मोबाईल क्रमांक' from the output
         filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
         
+        room_image_paths = None
         if not filtered_data.empty:
+            # Check if we have room information to display specific room images
+            for _, row in filtered_data.iterrows():
+                office_number = row.get("कार्यालय क्रमांक")
+                floor = row.get("मजला")
+                
+                if office_number and floor:
+                    room_numbers = extract_room_number(office_number)
+                    if room_numbers:
+                        room_image_paths = get_room_image(room_numbers, floor)
+                        if room_image_paths:
+                            break
+            
             result = "\n".join(
                 filtered_data.apply(
                     lambda row: "\n".join([f"- {k}: {v}" for k, v in row.dropna().items()]), axis=1
@@ -789,7 +973,11 @@ def search():
             result = "माहिती उपलब्ध नाही"
         
         audio_base64 = get_audio_file(result)
-        return jsonify({"result": result, "audio": audio_base64})
+        return jsonify({
+            "result": result, 
+            "audio": audio_base64,
+            "room_image": room_image_paths
+        })
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
