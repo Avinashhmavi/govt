@@ -162,10 +162,15 @@ def extract_room_number(office_number):
                 for num in number_pattern:
                     room_numbers.append(num)
             else:
-                # Extract single number
+                # Extract single number - improved regex to handle extra spaces
                 match = re.search(r'रूम\s*नं\.?\s*[-]?\s*(\d+[A-Z]?)', office_str)
                 if match:
                     room_numbers.append(match.group(1))
+                else:
+                    # Fallback: try to extract any number after "रूम नं"
+                    fallback_match = re.search(r'रूम\s*नं[^0-9]*(\d+[A-Z]?)', office_str)
+                    if fallback_match:
+                        room_numbers.append(fallback_match.group(1))
     
     # Remove duplicates and return list
     if room_numbers:
@@ -185,22 +190,50 @@ def get_room_image(room_numbers, floor):
     image_paths = []
     
     if floor == "तळ मजला" or floor == "तळ":
+        # Add general ground floor plan first
+        image_paths.append("floor_plans/ground_floor.jpg")
+        
         # Check if room numbers exist in ground floor mapping
         for room_num in room_numbers:
             for key, value in ground_floor_rooms.items():
                 if key == room_num:
-                    image_paths.append(f"static/floor_plans/Ground floor/{value}")
+                    image_paths.append(f"floor_plans/Ground floor/{value}")
                     break
     
     elif floor == "पहिला मजला" or floor == "पहिला":
+        # Add general first floor plan first
+        image_paths.append("floor_plans/first_floor.jpg")
+        print(f"Debug: Added first floor plan, current paths: {image_paths}")
+        
         # Check if room numbers exist in first floor mapping
         for room_num in room_numbers:
+            print(f"Debug: Checking room number: {room_num}")
             for key, value in first_floor_rooms.items():
                 if key == room_num:
-                    image_paths.append(f"static/floor_plans/first floor/{value}")
+                    image_paths.append(f"floor_plans/first floor/{value}")
+                    print(f"Debug: Added specific room image: floor_plans/first floor/{value}")
                     break
     
+    elif floor == "दुसरा मजला" or floor == "दुसरा":
+        image_paths.append("floor_plans/second_floor.jpg")
+    
+    elif floor == "तिसरा मजला" or floor == "तिसरा":
+        image_paths.append("floor_plans/third_floor.jpg")
+    
+    elif floor == "चौथा मजला" or floor == "चौथा":
+        image_paths.append("floor_plans/fourth_floor.jpg")
+    
+    elif floor == "पाचवा मजला" or floor == "पाचवा":
+        image_paths.append("floor_plans/fifth_floor.jpg")
+    
+    elif floor == "सहावा मजला" or floor == "सहावा":
+        image_paths.append("floor_plans/sixth_floor.jpg")
+    
+    elif floor == "सातवा मजला" or floor == "सातवा":
+        image_paths.append("floor_plans/seventh_floor.jpg")
+    
     # Return list of image paths, or None if no images found
+    print(f"Debug: Final image paths: {image_paths}")
     return image_paths if image_paths else None
 
 # Common corrections for names
@@ -942,10 +975,15 @@ def search():
         if not query:
             return jsonify({"error": "Query is required"}), 400
         
+        print(f"Debug: Received query: '{query}'")  # Debug line
+        
         # Filter data based on exact match of 'पद' or 'कार्यालय प्रमुखाचे नाव'
+        # Escape special regex characters in the query
+        import re
+        escaped_query = re.escape(query)
         filtered_data = df[
-            (df["पद"].astype(str).str.contains(query, case=False, na=False)) |
-            (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(query, case=False, na=False))
+            (df["पद"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True)) |
+            (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True))
         ]
         # Exclude 'मोबाईल क्रमांक' from the output
         filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
@@ -957,10 +995,21 @@ def search():
                 office_number = row.get("कार्यालय क्रमांक")
                 floor = row.get("मजला")
                 
+                print(f"Debug: Office number: {office_number}, Floor: {floor}")  # Debug line
+                
                 if office_number and floor:
                     room_numbers = extract_room_number(office_number)
+                    print(f"Debug: Extracted room numbers: {room_numbers}")  # Debug line
+                    
                     if room_numbers:
                         room_image_paths = get_room_image(room_numbers, floor)
+                        print(f"Debug: Room image paths: {room_image_paths}")  # Debug line
+                        if room_image_paths:
+                            break
+                    else:
+                        # If no specific room numbers, still try to get floor plan
+                        room_image_paths = get_room_image([], floor)
+                        print(f"Debug: Floor plan paths: {room_image_paths}")  # Debug line
                         if room_image_paths:
                             break
             
@@ -1006,5 +1055,5 @@ def get_audio():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.getenv("PORT", 5000))
+    port = int(os.getenv("PORT", 5009))
     app.run(host='0.0.0.0', port=port, debug=False)
