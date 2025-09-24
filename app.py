@@ -33,7 +33,7 @@ floor_mapping = {
     "सातवा": "seventh",
 }
 
-# Room number mapping for ground floor and first floor
+# Room number mapping for all floors
 ground_floor_rooms = {
     "जी-1": "G-1.jpg",
     "जी-01": "G-1.jpg",
@@ -77,6 +77,7 @@ ground_floor_rooms = {
 
 first_floor_rooms = {
     "101": "101.jpg",
+    "101-B": "101-B.jpg",
     "102": "102.jpg",
     "103": "103.jpg",
     "104": "104.jpg",
@@ -101,6 +102,125 @@ first_floor_rooms = {
     "122": "122.jpg",
     "123": "123.jpg",
     "124": "124.jpg"
+}
+
+second_floor_rooms = {
+    "201": "201.jpg",
+    "202": "202.jpg",
+    "203": "203.jpg",
+    "210": "210.jpg",
+    "211": "211.jpg",
+    "212": "212.jpg",
+    "213": "213.jpg",
+    "214": "214.jpg",
+    "217": "217.jpg",
+    "218": "218.jpg",
+    "221": "221.jpg",
+    "222": "222.jpg",
+    "223": "223.jpg",
+    "224": "224.jpg"
+}
+
+third_floor_rooms = {
+    "301": "301.jpg",
+    "302": "302.jpg",
+    "305": "305.jpg",
+    "307": "307.jpg",
+    "308": "308.jpg",
+    "309": "309.jpg",
+    "310": "310.jpg",
+    "311": "311.jpg",
+    "312": "312.jpg",
+    "314": "314.jpg",
+    "315": "315.jpg",
+    "317": "317.jpg",
+    "319": "319.jpg",
+    "321": "321.jpg",
+    "322": "322.jpg",
+    "328": "328.jpg"
+}
+
+fourth_floor_rooms = {
+    "401": "401.jpg",
+    "409": "409.jpg",
+    "411": "411.jpg",
+    "412": "412.jpg",
+    "415": "415.jpg",
+    "416": "416.jpg",
+    "419": "419.jpg",
+    "420": "420.jpg",
+    "428": "428.jpg",
+    "429": "429.jpg"
+}
+
+fifth_floor_rooms = {
+    "501": "501.jpg",
+    "502": "502.jpg",
+    "503": "503.jpg",
+    "510": "510.jpg",
+    "511": "511.jpg",
+    "512": "512.jpg",
+    "513": "513.jpg",
+    "514": "514.jpg",
+    "515": "515.jpg",
+    "516": "516.jpg",
+    "518": "518.jpg",
+    "523": "523.jpg",
+    "524": "524.jpg",
+    "525": "525.jpg",
+    "526": "526.jpg",
+    "527": "527.jpg",
+    "528": "528.jpg"
+}
+
+sixth_floor_rooms = {
+    "601": "601.jpg",
+    "602": "602.jpg",
+    "603": "603.jpg",
+    "606": "606.jpg",
+    "608": "608.jpg",
+    "610": "610.jpg",
+    "611": "611.jpg",
+    "612": "612.jpg",
+    "613": "613.jpg",
+    "614": "614.jpg",
+    "615": "615.jpg",
+    "616": "616.jpg",
+    "617": "617.jpg",
+    "618": "618.jpg",
+    "619": "619.jpg",
+    "620": "620.jpg",
+    "621": "621.jpg",
+    "622": "622.jpg",
+    "623": "623.jpg",
+    "624": "624.jpg",
+    "625": "625.jpg",
+    "626": "626.jpg",
+    "627": "627.jpg",
+    "628": "628.jpg"
+}
+
+seventh_floor_rooms = {
+    "701": "701.jpg",
+    "702": "702.jpg",
+    "704": "704.jpg",
+    "705": "705.jpg",
+    "706": "706.jpg",
+    "708": "708.jpg",
+    "709": "709.jpg",
+    "710": "710.jpg",
+    "711": "711.jpg",
+    "712": "712.jpg",
+    "713": "713.jpg",
+    "714": "714.jpg",
+    "715": "715.jpg",
+    "716": "716.jpg",
+    "720": "720.jpg",
+    "721": "721.jpg",
+    "721-A": "721-A.jpg",
+    "721-K": "721-K.jpg",
+    "727": "727.jpg",
+    "732": "732.jpg"
 }
 
 def extract_room_number(office_number):
@@ -139,7 +259,7 @@ def extract_room_number(office_number):
                 if match:
                     room_numbers.append(f"जी-{match.group(1)}")
     
-    # Check for first floor rooms (रूम नं. pattern)
+    # Check for room numbers (रूम नं. pattern) - handles all floors
     if "रूम नं" in office_str:
         # Handle specific patterns first
         if '-' in office_str and not ('/' in office_str or ',' in office_str):
@@ -172,6 +292,21 @@ def extract_room_number(office_number):
                     if fallback_match:
                         room_numbers.append(fallback_match.group(1))
     
+    # Check for direct room number patterns (without "रूम नं" prefix)
+    # This handles cases like "201", "301", "401" etc.
+    if not room_numbers and re.search(r'^\d+[A-Z]?$', office_str.strip()):
+        room_numbers.append(office_str.strip())
+    
+    # Check for room number patterns with spaces or other separators
+    if not room_numbers:
+        # Look for patterns like "201, 202" or "301-305" etc.
+        number_pattern = re.findall(r'(\d+[A-Z]?)', office_str)
+        if number_pattern:
+            # Filter out very small numbers that might be part of other text
+            for num in number_pattern:
+                if len(num) >= 2:  # Room numbers are typically 2+ digits
+                    room_numbers.append(num)
+    
     # Remove duplicates and return list
     if room_numbers:
         return list(set(room_numbers))
@@ -189,48 +324,64 @@ def get_room_image(room_numbers, floor):
     
     image_paths = []
     
+    # For floors 5, 6, 7: Show only main floor plan image (no individual room images)
+    if floor == "पाचवा मजला" or floor == "पाचवा":
+        image_paths.append("floor_plans/fifth_floor.jpg")
+        print(f"Debug: Added fifth floor plan only, current paths: {image_paths}")
+        return image_paths
+    
+    elif floor == "सहावा मजला" or floor == "सहावा":
+        image_paths.append("floor_plans/sixth_floor.jpg")
+        print(f"Debug: Added sixth floor plan only, current paths: {image_paths}")
+        return image_paths
+    
+    elif floor == "सातवा मजला" or floor == "सातवा":
+        image_paths.append("floor_plans/seventh_floor.jpg")
+        print(f"Debug: Added seventh floor plan only, current paths: {image_paths}")
+        return image_paths
+    
+    # For other floors (1-4): Show only individual room images (no main floor plan)
     if floor == "तळ मजला" or floor == "तळ":
-        # Add general ground floor plan first
-        image_paths.append("floor_plans/ground_floor.jpg")
-        
         # Check if room numbers exist in ground floor mapping
         for room_num in room_numbers:
             for key, value in ground_floor_rooms.items():
                 if key == room_num:
-                    image_paths.append(f"floor_plans/Ground floor/{value}")
+                    image_paths.append(f"floor_plans/ground_floor/{value}")
                     break
     
     elif floor == "पहिला मजला" or floor == "पहिला":
-        # Add general first floor plan first
-        image_paths.append("floor_plans/first_floor.jpg")
-        print(f"Debug: Added first floor plan, current paths: {image_paths}")
-        
         # Check if room numbers exist in first floor mapping
         for room_num in room_numbers:
             print(f"Debug: Checking room number: {room_num}")
             for key, value in first_floor_rooms.items():
                 if key == room_num:
-                    image_paths.append(f"floor_plans/first floor/{value}")
-                    print(f"Debug: Added specific room image: floor_plans/first floor/{value}")
+                    image_paths.append(f"floor_plans/first_floor/{value}")
+                    print(f"Debug: Added specific room image: floor_plans/first_floor/{value}")
                     break
     
     elif floor == "दुसरा मजला" or floor == "दुसरा":
-        image_paths.append("floor_plans/second_floor.jpg")
+        # Check if room numbers exist in second floor mapping
+        for room_num in room_numbers:
+            for key, value in second_floor_rooms.items():
+                if key == room_num:
+                    image_paths.append(f"floor_plans/second_floor/{value}")
+                    break
     
     elif floor == "तिसरा मजला" or floor == "तिसरा":
-        image_paths.append("floor_plans/third_floor.jpg")
+        # Check if room numbers exist in third floor mapping
+        for room_num in room_numbers:
+            for key, value in third_floor_rooms.items():
+                if key == room_num:
+                    image_paths.append(f"floor_plans/third_floor/{value}")
+                    break
     
     elif floor == "चौथा मजला" or floor == "चौथा":
-        image_paths.append("floor_plans/fourth_floor.jpg")
-    
-    elif floor == "पाचवा मजला" or floor == "पाचवा":
-        image_paths.append("floor_plans/fifth_floor.jpg")
-    
-    elif floor == "सहावा मजला" or floor == "सहावा":
-        image_paths.append("floor_plans/sixth_floor.jpg")
-    
-    elif floor == "सातवा मजला" or floor == "सातवा":
-        image_paths.append("floor_plans/seventh_floor.jpg")
+        # Check if room numbers exist in fourth floor mapping
+        for room_num in room_numbers:
+            for key, value in fourth_floor_rooms.items():
+                if key == room_num:
+                    image_paths.append(f"floor_plans/fourth_floor/{value}")
+                    break
     
     # Return list of image paths, or None if no images found
     print(f"Debug: Final image paths: {image_paths}")
@@ -977,18 +1128,19 @@ def search():
         
         print(f"Debug: Received query: '{query}'")  # Debug line
         
-        # Filter data based on exact match of 'पद' or 'कार्यालय प्रमुखाचे नाव'
+        # Filter data based on exact match of 'पद', 'कार्यालय प्रमुखाचे नाव', or 'कार्यालय क्रमांक'
         # Escape special regex characters in the query
         import re
         escaped_query = re.escape(query)
         filtered_data = df[
             (df["पद"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True)) |
-            (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True))
+            (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True)) |
+            (df["कार्यालय क्रमांक"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True))
         ]
         # Exclude 'मोबाईल क्रमांक' from the output
         filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
         
-        room_image_paths = None
+        room_image_paths = []
         if not filtered_data.empty:
             # Check if we have room information to display specific room images
             for _, row in filtered_data.iterrows():
@@ -1002,16 +1154,20 @@ def search():
                     print(f"Debug: Extracted room numbers: {room_numbers}")  # Debug line
                     
                     if room_numbers:
-                        room_image_paths = get_room_image(room_numbers, floor)
-                        print(f"Debug: Room image paths: {room_image_paths}")  # Debug line
-                        if room_image_paths:
-                            break
+                        current_room_images = get_room_image(room_numbers, floor)
+                        print(f"Debug: Room image paths for this record: {current_room_images}")  # Debug line
+                        if current_room_images:
+                            room_image_paths.extend(current_room_images)
                     else:
                         # If no specific room numbers, still try to get floor plan
-                        room_image_paths = get_room_image([], floor)
-                        print(f"Debug: Floor plan paths: {room_image_paths}")  # Debug line
-                        if room_image_paths:
-                            break
+                        current_floor_images = get_room_image([], floor)
+                        print(f"Debug: Floor plan paths for this record: {current_floor_images}")  # Debug line
+                        if current_floor_images:
+                            room_image_paths.extend(current_floor_images)
+            
+            # Remove duplicates and convert to None if empty
+            room_image_paths = list(set(room_image_paths)) if room_image_paths else None
+            print(f"Debug: Final combined room image paths: {room_image_paths}")  # Debug line
             
             result = "\n".join(
                 filtered_data.apply(
