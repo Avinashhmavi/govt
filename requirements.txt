@@ -6,3 +6,5 @@ werkzeug
 python-dotenv
 gunicorn
 flask-cors
+qrcode
+Pillow

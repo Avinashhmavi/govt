@@ -9,6 +9,10 @@ from openai import OpenAI
 import base64
 from flask_cors import CORS
 import re
+import qrcode
+from PIL import Image
+import uuid
+from datetime import datetime, timedelta
 
 # Load environment variables
 load_dotenv()
@@ -1209,6 +1213,223 @@ def get_audio():
         return jsonify({"audio": audio_base64})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# QR Code generation endpoint
+@app.route('/generate_qr', methods=['POST'])
+def generate_qr():
+    try:
+        data = request.json
+        query = data.get('query', '')
+        
+        if not query:
+            return jsonify({"error": "Query is required"}), 400
+        
+        # Search for the office details
+        filtered_data = df[
+            (df["पद"].astype(str).str.contains(re.escape(query), case=False, na=False, regex=True)) |
+            (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(re.escape(query), case=False, na=False, regex=True)) |
+            (df["कार्यालय क्रमांक"].astype(str).str.contains(re.escape(query), case=False, na=False, regex=True))
+        ]
+        
+        if filtered_data.empty:
+            return jsonify({"error": "माहिती सापडली नाही"}), 404
+        
+        # Exclude mobile numbers from QR content
+        filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
+        
+        # Get room images for the content
+        room_image_paths = []
+        for _, row in filtered_data.iterrows():
+            office_number = row.get("कार्यालय क्रमांक")
+            floor = row.get("मजला")
+            
+            if office_number and floor:
+                room_numbers = extract_room_number(office_number)
+                if room_numbers:
+                    current_room_images = get_room_image(room_numbers, floor)
+                    if current_room_images:
+                        room_image_paths.extend(current_room_images)
+                else:
+                    # If no specific room numbers, get floor plan
+                    current_floor_images = get_room_image([], floor)
+                    if current_floor_images:
+                        room_image_paths.extend(current_floor_images)
+        
+        # Remove duplicates
+        room_image_paths = list(set(room_image_paths)) if room_image_paths else []
+        
+        # Format the content for mobile display
+        content = "\n".join(
+            filtered_data.apply(
+                lambda row: "\n".join([f"- {k}: {v}" for k, v in row.dropna().items()]), axis=1
+            )
+        )
+        
+        # Add room images to content if available
+        if room_image_paths:
+            content += "\n\n- मजला नकाशा: उपलब्ध आहे"
+        
+        # Generate a unique session ID
+        session_id = str(uuid.uuid4())
+        
+        # Create mobile display URL using network IP for mobile access
+        mobile_url = f"http://192.168.1.12:5009/mobile_display/{session_id}"
+        
+        # Store the content in a simple way (in production, use a database)
+        # For now, we'll pass it as a parameter with proper URL encoding
+        import urllib.parse
+        content_b64 = base64.b64encode(content.encode('utf-8')).decode('utf-8')
+        mobile_url_with_content = f"{mobile_url}?content={urllib.parse.quote(content_b64)}"
+        
+        # Generate QR code with smaller size
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=6,  # Smaller box size
+            border=2,    # Smaller border
+        )
+        qr.add_data(mobile_url_with_content)
+        qr.make(fit=True)
+        
+        # Create QR code image
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to base64
+        img_buffer = io.BytesIO()
+        img.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        qr_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
+        
+        return jsonify({
+            "qr_code": qr_base64,
+            "mobile_url": mobile_url_with_content,
+            "session_id": session_id
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Mobile display endpoint
+@app.route('/mobile_display/<session_id>')
+def mobile_display(session_id):
+    try:
+        # Get content from URL parameter and URL decode it
+        content_b64_encoded = request.args.get('content', '')
+        
+        if not content_b64_encoded:
+            return render_template('mobile_display.html', 
+                                 content="<p style='color: #f44336; text-align: center;'>त्रुटी: माहिती उपलब्ध नाही</p>")
+        
+        # URL decode the base64 string first
+        import urllib.parse
+        content_b64 = urllib.parse.unquote(content_b64_encoded)
+        
+        # Decode content
+        content = base64.b64decode(content_b64).decode('utf-8')
+        
+        # Format content for better display
+        formatted_content = format_mobile_content(content)
+        
+        # Check if content mentions floor plans and add images using the same logic as main app
+        room_images_html = ""
+        if "मजला नकाशा: उपलब्ध आहे" in content:
+            # Parse the content to extract office information like the main app does
+            room_image_paths = []
+            
+            # Split content by office entries (each starts with "- पद:")
+            office_entries = re.split(r'\n- पद:', content)
+            
+            for entry in office_entries:
+                if not entry.strip():
+                    continue
+                    
+                # Add back the "- पद:" prefix if it was removed
+                if not entry.startswith('- पद:'):
+                    entry = '- पद:' + entry
+                
+                # Extract office number and floor from this entry
+                office_match = re.search(r'- कार्यालय क्रमांक:\s*([^\n]+)', entry)
+                floor_match = re.search(r'- मजला:\s*([^\n]+)', entry)
+                
+                if office_match and floor_match:
+                    office_number = office_match.group(1).strip()
+                    floor = floor_match.group(1).strip()
+                    
+                    # Use the same logic as main app
+                    room_numbers = extract_room_number(office_number)
+                    if room_numbers:
+                        current_room_images = get_room_image(room_numbers, floor)
+                        if current_room_images:
+                            room_image_paths.extend(current_room_images)
+                    else:
+                        # If no specific room numbers, still try to get floor plan
+                        current_floor_images = get_room_image([], floor)
+                        if current_floor_images:
+                            room_image_paths.extend(current_floor_images)
+            
+            # Remove duplicates
+            room_image_paths = list(set(room_image_paths)) if room_image_paths else []
+            
+            # Generate HTML for all images
+            if room_image_paths:
+                room_images_html = "<div class='floor-plans'><h4>🏢 मजला नकाशा:</h4>"
+                for img_path in room_image_paths:
+                    # Ensure the path starts with /static/
+                    if not img_path.startswith('/static/'):
+                        img_path = '/static/' + img_path
+                    room_images_html += f"<img src='{img_path}' alt='Floor Plan' class='floor-plan-img'>"
+                room_images_html += "</div>"
+        
+        return render_template('mobile_display.html', content=formatted_content, room_images=room_images_html)
+        
+    except Exception as e:
+        return render_template('mobile_display.html', 
+                             content=f"<p style='color: #f44336; text-align: center;'>त्रुटी: {str(e)}</p>")
+
+def get_floor_plan_images(floor):
+    """Get floor plan images based on floor name"""
+    floor_lower = floor.lower()
+    
+    if "तळ" in floor_lower or "ground" in floor_lower:
+        return ["/static/floor_plans/ground_floor/"]  # Ground floor directory
+    elif "पहिला" in floor_lower or "first" in floor_lower or "1" in floor_lower:
+        return ["/static/floor_plans/first_floor/"]  # First floor directory
+    elif "दुसरा" in floor_lower or "second" in floor_lower or "2" in floor_lower:
+        return ["/static/floor_plans/second_floor/"]  # Second floor directory
+    elif "तिसरा" in floor_lower or "third" in floor_lower or "3" in floor_lower:
+        return ["/static/floor_plans/third_floor/"]  # Third floor directory
+    elif "चौथा" in floor_lower or "fourth" in floor_lower or "4" in floor_lower:
+        return ["/static/floor_plans/fourth_floor/"]  # Fourth floor directory
+    elif "पाचवा" in floor_lower or "fifth" in floor_lower or "5" in floor_lower:
+        return ["/static/floor_plans/fifth_floor.jpg"]  # Direct fifth floor image
+    elif "सहावा" in floor_lower or "sixth" in floor_lower or "6" in floor_lower:
+        return ["/static/floor_plans/sixth_floor.jpg"]  # Direct sixth floor image
+    elif "सातवा" in floor_lower or "seventh" in floor_lower or "7" in floor_lower:
+        return ["/static/floor_plans/seventh_floor.jpg"]  # Direct seventh floor image
+    else:
+        return ["/static/floor_plans/fifth_floor.jpg"]  # Default fallback
+
+def format_mobile_content(content):
+    """Format content for mobile display"""
+    lines = content.split('\n')
+    formatted_lines = []
+    
+    for line in lines:
+        if line.strip():
+            if line.startswith('- '):
+                # Format as a proper field
+                field = line[2:]  # Remove '- '
+                if ':' in field:
+                    key, value = field.split(':', 1)
+                    formatted_lines.append(f"<strong style='color: #667eea;'>{key.strip()}:</strong> {value.strip()}")
+                else:
+                    formatted_lines.append(f"<div style='margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea;'>{field}</div>")
+            else:
+                formatted_lines.append(f"<div style='margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea;'>{line}</div>")
+        else:
+            formatted_lines.append("<br>")
+    
+    return '<br>'.join(formatted_lines)
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5009))

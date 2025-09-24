@@ -6,6 +6,10 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="robots" content="noindex, nofollow">
     <title>कोकण भवन कार्यालय निर्देशिका</title>
+    <!-- Cache buster: v2.2 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Noto+Sans+Devanagari:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -765,6 +769,7 @@
             <audio id="voiceAudio" controls style="display: none;"></audio>
         </div>
 
+
         <div class="footer-images">
             <img src="{{ url_for('static', filename='dep.jpg') }}" alt="Department Logo">
             <img src="{{ url_for('static', filename='vija.png') }}" alt="Vijaybhoomi Logo">
@@ -807,7 +812,7 @@
             });
         }
 
-        function showResult(section, result, audioData, roomImagePath) {
+        function showResult(section, result, audioData, roomImagePath, query) {
             const resultDiv = document.getElementById(`${section}Result`);
             const statusDiv = document.getElementById(`${section}Status`);
             const audioElement = document.getElementById(`${section}Audio`);
@@ -816,7 +821,7 @@
             
             if (result) {
                 resultDiv.style.display = 'block';
-                resultDiv.innerHTML = formatResult(result, roomImagePath);
+                resultDiv.innerHTML = formatResult(result, roomImagePath, query);
             }
             
             if (audioData) {
@@ -862,7 +867,7 @@
             resultDiv.innerHTML = `<div class="error">${error}</div>`;
         }
 
-        function formatResult(text, roomImagePath) {
+        function formatResult(text, roomImagePath, query) {
             let content = '';
             let images = '';
             
@@ -928,7 +933,21 @@
                 images += '</div>';
             }
             
-            return content.trim() + images;
+            // Add QR code generation button
+            let qrButton = '';
+            if (query) {
+                qrButton = `
+                    <div style="margin-top: 20px; text-align: center; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 12px; border: 2px solid #e9ecef;">
+                        <h4 style="color: #667eea; margin-bottom: 12px; font-size: 16px;">📱 मोबाइलसाठी QR कोड</h4>
+                        <p style="margin-bottom: 15px; color: #6c757d; font-size: 14px;">ही माहिती मोबाइलवर 30 मिनिटांसाठी पाहण्यासाठी QR कोड जनरेट करा</p>
+                        <button onclick="generateQRCode('${query.replace(/'/g, "\\'")}')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
+                            📱 QR कोड जनरेट करा
+                        </button>
+                    </div>
+                `;
+            }
+            
+            return content.trim() + images + qrButton;
         }
 
         async function searchByDepartment() {
@@ -960,7 +979,7 @@
                 if (data.error) {
                     showError('department', data.error);
                 } else {
-                    showResult('department', data.result, data.audio, data.room_image);
+                    showResult('department', data.result, data.audio, data.room_image, dept);
                 }
             } catch (error) {
                 showError('department', `त्रुटी: ${error.message}`);
@@ -1000,7 +1019,7 @@
                 if (data.error) {
                     showError('person', data.error);
                 } else {
-                    showResult('person', data.result, data.audio, data.room_image);
+                    showResult('person', data.result, data.audio, data.room_image, person);
                 }
             } catch (error) {
                 showError('person', `त्रुटी: ${error.message}`);
@@ -1052,7 +1071,7 @@
                         if (data.error) {
                             showError('voice', data.error);
                         } else {
-                            showResult('voice', data.result, data.audio, data.room_image);
+                            showResult('voice', data.result, data.audio, data.room_image, query);
                         }
                     } catch (error) {
                         showError('voice', `त्रुटी: ${error.message}`);
@@ -1084,6 +1103,97 @@
                 voiceBtn.innerHTML = originalText;
                 voiceBtn.classList.remove('listening');
             }
+        }
+
+        async function generateQRCode(query) {
+            if (!query) {
+                alert('कृपया शोध करा आणि QR कोड जनरेट करा');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/generate_qr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert(`त्रुटी: ${data.error}`);
+                } else {
+                    showQRResult(data.qr_code, data.mobile_url);
+                }
+            } catch (error) {
+                alert(`त्रुटी: ${error.message}`);
+            }
+        }
+
+        function showQRResult(qrCodeBase64, mobileUrl) {
+            // Create modal for QR code display
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+                animation: fadeIn 0.3s ease;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; padding: 30px; border-radius: 20px; text-align: center; max-width: 400px; width: 90%; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);">
+                    <h3 style="color: #667eea; margin-bottom: 20px; font-size: 20px;">📱 QR कोड</h3>
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 15px; display: inline-block; margin-bottom: 20px;">
+                        <img src="data:image/png;base64,${qrCodeBase64}" alt="QR Code" style="width: 150px; height: 150px; display: block;">
+                    </div>
+                    <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 12px; border-left: 4px solid #2196f3;">
+                        <p style="margin: 0; color: #1a1a1a; font-size: 14px; line-height: 1.5;">
+                            <strong>सूचना:</strong> हा QR कोड स्कॅन करा आणि मोबाइलवर 30 मिनिटांसाठी माहिती पहा.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: center;">
+                        <button onclick="copyToClipboard('${mobileUrl}')" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                            📋 लिंक कॉपी करा
+                        </button>
+                        <button onclick="this.closest('.modal').remove()" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%); color: white; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                            ✕ बंद करा
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            modal.className = 'modal';
+            document.body.appendChild(modal);
+            
+            // Close modal when clicking outside
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert('लिंक कॉपी झाला! आता तुम्ही तो मोबाइलवर शेअर करू शकता.');
+            }).catch(function(err) {
+                console.error('Copy failed:', err);
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('लिंक कॉपी झाला! आता तुम्ही तो मोबाइलवर शेअर करू शकता.');
+            });
         }
 
         function startTimeout(section, timeoutDuration = 30000) {
