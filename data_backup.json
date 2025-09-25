@@ -1,407 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
-from werkzeug.security import check_password_hash
-import pandas as pd
-from gtts import gTTS
-import io
-import os
-from dotenv import load_dotenv
-from openai import OpenAI
-import base64
-from flask_cors import CORS
-import re
-import qrcode
-from PIL import Image
-import uuid
-from datetime import datetime, timedelta
-
-# Load environment variables
-load_dotenv()
-openai_api_key = os.getenv("OPENAI_API_KEY")
-
-# Initialize Flask app
-app = Flask(__name__, static_folder='static', static_url_path='/static')
-CORS(app)  # Enable CORS for API access
-
-# Initialize OpenAI client
-client = OpenAI(api_key=openai_api_key)
-
-# Floor mapping from Marathi to English
-floor_mapping = {
-    "तळ": "ground",
-    "पहिला": "first",
-    "दुसरा": "second",
-    "तिसरा": "third",
-    "चौथा": "fourth",
-    "पाचवा": "fifth",
-    "सहावा": "sixth",
-    "सातवा": "seventh",
-}
-
-# Room number mapping for all floors
-ground_floor_rooms = {
-    "जी-1": "G-1.jpg",
-    "जी-01": "G-1.jpg",
-    "जी-2": "G-2.jpg",
-    "जी-02": "G-2.jpg", 
-    "जी-4": "G-4.jpg",
-    "जी-04": "G-4.jpg",
-    "जी-5": "G-5.jpg",
-    "जी-05": "G-5.jpg",
-    "जी-6": "G-6.jpg",
-    "जी-06": "G-6.jpg",
-    "जी-7": "G-7.jpg",
-    "जी-07": "G-7.jpg",
-    "जी-8": "G-8.jpg",
-    "जी-08": "G-8.jpg",
-    "जी-8A": "G-8A.jpg",
-    "जी-08A": "G-8A.jpg",
-    "जी-9": "G-9.jpg",
-    "जी-09": "G-9.jpg",
-    "जी-10": "G-10.jpg",
-    "जी-11": "G-11.jpg",
-    "जी-12": "G-12.jpg",
-    "जी-13": "G-13.jpg",
-    "जी-14": "G-14.jpg",
-    "जी-15": "G-15.jpg",
-    "जी-16": "G-16.jpg",
-    "जी-17": "G-17.jpg",
-    "जी-18": "G-18.jpg",
-    "जी-19": "G-19.jpg",
-    "जी-20": "G-20.jpg",
-    "जी-21": "G-21.jpg",
-    "जी-22": "G-22.jpg",
-    "जी-23": "G-23.jpg",
-    "जी-24": "G-24.jpg",
-    "जी-25": "G-25.jpg",
-    "जी-27": "G-27.jpg",
-    "जी-28": "G-28.jpg",
-    "जी-29": "G-29.jpg",
-    "जी-29A": "G-29A.jpg"
-}
-
-first_floor_rooms = {
-    "101": "101.jpg",
-    "101-B": "101-B.jpg",
-    "102": "102.jpg",
-    "103": "103.jpg",
-    "104": "104.jpg",
-    "105": "105.jpg",
-    "106": "106.jpg",
-    "107": "107.jpg",
-    "108": "108.jpg",
-    "109": "109.jpg",
-    "110": "110.jpg",
-    "111": "111.jpg",
-    "112": "112.jpg",
-    "113": "113.jpg",
-    "114": "114.jpg",
-    "115": "115.jpg",
-    "116": "116.jpg",
-    "117": "117.jpg",
-    "118": "118.jpg",
-    "119": "119.jpg",
-    "119-A": "119-A.jpg",
-    "119-B": "119-B.jpg",
-    "121": "121.jpg",
-    "122": "122.jpg",
-    "123": "123.jpg",
-    "124": "124.jpg"
-}
-
-second_floor_rooms = {
-    "201": "201.jpg",
-    "202": "202.jpg",
-    "203": "203.jpg",
-    "210": "210.jpg",
-    "211": "211.jpg",
-    "212": "212.jpg",
-    "213": "213.jpg",
-    "214": "214.jpg",
-    "217": "217.jpg",
-    "218": "218.jpg",
-    "221": "221.jpg",
-    "222": "222.jpg",
-    "223": "223.jpg",
-    "224": "224.jpg"
-}
-
-third_floor_rooms = {
-    "301": "301.jpg",
-    "302": "302.jpg",
-    "305": "305.jpg",
-    "307": "307.jpg",
-    "308": "308.jpg",
-    "309": "309.jpg",
-    "310": "310.jpg",
-    "311": "311.jpg",
-    "312": "312.jpg",
-    "314": "314.jpg",
-    "315": "315.jpg",
-    "317": "317.jpg",
-    "319": "319.jpg",
-    "321": "321.jpg",
-    "322": "322.jpg",
-    "328": "328.jpg"
-}
-
-fourth_floor_rooms = {
-    "401": "401.jpg",
-    "409": "409.jpg",
-    "411": "411.jpg",
-    "412": "412.jpg",
-    "415": "415.jpg",
-    "416": "416.jpg",
-    "419": "419.jpg",
-    "420": "420.jpg",
-    "428": "428.jpg",
-    "429": "429.jpg"
-}
-
-fifth_floor_rooms = {
-    "501": "501.jpg",
-    "502": "502.jpg",
-    "503": "503.jpg",
-    "510": "510.jpg",
-    "511": "511.jpg",
-    "512": "512.jpg",
-    "513": "513.jpg",
-    "514": "514.jpg",
-    "515": "515.jpg",
-    "516": "516.jpg",
-    "518": "518.jpg",
-    "523": "523.jpg",
-    "524": "524.jpg",
-    "525": "525.jpg",
-    "526": "526.jpg",
-    "527": "527.jpg",
-    "528": "528.jpg"
-}
-
-sixth_floor_rooms = {
-    "601": "601.jpg",
-    "602": "602.jpg",
-    "603": "603.jpg",
-    "606": "606.jpg",
-    "608": "608.jpg",
-    "610": "610.jpg",
-    "611": "611.jpg",
-    "612": "612.jpg",
-    "613": "613.jpg",
-    "614": "614.jpg",
-    "615": "615.jpg",
-    "616": "616.jpg",
-    "617": "617.jpg",
-    "618": "618.jpg",
-    "619": "619.jpg",
-    "620": "620.jpg",
-    "621": "621.jpg",
-    "622": "622.jpg",
-    "623": "623.jpg",
-    "624": "624.jpg",
-    "625": "625.jpg",
-    "626": "626.jpg",
-    "627": "627.jpg",
-    "628": "628.jpg"
-}
-
-seventh_floor_rooms = {
-    "701": "701.jpg",
-    "702": "702.jpg",
-    "704": "704.jpg",
-    "705": "705.jpg",
-    "706": "706.jpg",
-    "708": "708.jpg",
-    "709": "709.jpg",
-    "710": "710.jpg",
-    "711": "711.jpg",
-    "712": "712.jpg",
-    "713": "713.jpg",
-    "714": "714.jpg",
-    "715": "715.jpg",
-    "716": "716.jpg",
-    "720": "720.jpg",
-    "721": "721.jpg",
-    "721-A": "721-A.jpg",
-    "721-K": "721-K.jpg",
-    "727": "727.jpg",
-    "732": "732.jpg"
-}
-
-def extract_room_number(office_number):
-    """Extract room numbers from office number field"""
-    if pd.isna(office_number) or not office_number:
-        return None
-    
-    office_str = str(office_number).strip()
-    room_numbers = []
-    
-    # Check for ground floor rooms (जी- pattern)
-    if "जी" in office_str:
-        # Handle specific patterns first
-        if '-' in office_str and not ('/' in office_str or ',' in office_str):
-            # Handle patterns like जी-14-15 (range) - with or without spaces
-            range_match = re.search(r'जी\s*[-]?\s*(\d+)\s*[-]\s*(\d+)', office_str)
-            if range_match:
-                start_num = int(range_match.group(1))
-                end_num = int(range_match.group(2))
-                for num in range(start_num, end_num + 1):
-                    room_numbers.append(f"जी-{num}")
-            else:
-                # Extract individual numbers
-                number_pattern = re.findall(r'(\d+[A-Z]?)', office_str)
-                for num in number_pattern:
-                    room_numbers.append(f"जी-{num}")
-        else:
-            # Handle patterns like जी-09/10, जी-1,2,3 etc.
-            if '/' in office_str or ',' in office_str or 'ते' in office_str:
-                number_pattern = re.findall(r'(\d+[A-Z]?)', office_str)
-                for num in number_pattern:
-                    room_numbers.append(f"जी-{num}")
-            else:
-                # Extract single number
-                match = re.search(r'जी\s*[-]?\s*(\d+[A-Z]?)', office_str)
-                if match:
-                    room_numbers.append(f"जी-{match.group(1)}")
-    
-    # Check for room numbers (रूम नं. pattern) - handles all floors
-    if "रूम नं" in office_str:
-        # Handle specific patterns first
-        if '-' in office_str and not ('/' in office_str or ',' in office_str):
-            # Handle patterns like रूम नं.-401 ते 406 (range)
-            range_match = re.search(r'(\d+)\s*ते\s*(\d+)', office_str)
-            if range_match:
-                start_num = int(range_match.group(1))
-                end_num = int(range_match.group(2))
-                for num in range(start_num, end_num + 1):
-                    room_numbers.append(str(num))
-            else:
-                # Extract individual numbers
-                number_pattern = re.findall(r'(\d+[A-Z]?)', office_str)
-                for num in number_pattern:
-                    room_numbers.append(num)
-        else:
-            # Handle patterns like रूम नं.-101/102, रूम नं. 101,102 etc.
-            if '/' in office_str or ',' in office_str:
-                number_pattern = re.findall(r'(\d+[A-Z]?)', office_str)
-                for num in number_pattern:
-                    room_numbers.append(num)
-            else:
-                # Extract single number - improved regex to handle extra spaces
-                match = re.search(r'रूम\s*नं\.?\s*[-]?\s*(\d+[A-Z]?)', office_str)
-                if match:
-                    room_numbers.append(match.group(1))
-                else:
-                    # Fallback: try to extract any number after "रूम नं"
-                    fallback_match = re.search(r'रूम\s*नं[^0-9]*(\d+[A-Z]?)', office_str)
-                    if fallback_match:
-                        room_numbers.append(fallback_match.group(1))
-    
-    # Check for direct room number patterns (without "रूम नं" prefix)
-    # This handles cases like "201", "301", "401" etc.
-    if not room_numbers and re.search(r'^\d+[A-Z]?$', office_str.strip()):
-        room_numbers.append(office_str.strip())
-    
-    # Check for room number patterns with spaces or other separators
-    if not room_numbers:
-        # Look for patterns like "201, 202" or "301-305" etc.
-        number_pattern = re.findall(r'(\d+[A-Z]?)', office_str)
-        if number_pattern:
-            # Filter out very small numbers that might be part of other text
-            for num in number_pattern:
-                if len(num) >= 2:  # Room numbers are typically 2+ digits
-                    room_numbers.append(num)
-    
-    # Remove duplicates and return list
-    if room_numbers:
-        return list(set(room_numbers))
-    
-    return None
-
-def get_room_image(room_numbers, floor):
-    """Get the specific room image paths based on room numbers and floor"""
-    if not room_numbers:
-        return None
-    
-    # Convert single room number to list for consistency
-    if not isinstance(room_numbers, list):
-        room_numbers = [room_numbers]
-    
-    image_paths = []
-    
-    # For floors 5, 6, 7: Show only main floor plan image (no individual room images)
-    if floor == "पाचवा मजला" or floor == "पाचवा":
-        image_paths.append("floor_plans/fifth_floor.jpg")
-        print(f"Debug: Added fifth floor plan only, current paths: {image_paths}")
-        return image_paths
-    
-    elif floor == "सहावा मजला" or floor == "सहावा":
-        image_paths.append("floor_plans/sixth_floor.jpg")
-        print(f"Debug: Added sixth floor plan only, current paths: {image_paths}")
-        return image_paths
-    
-    elif floor == "सातवा मजला" or floor == "सातवा":
-        image_paths.append("floor_plans/seventh_floor.jpg")
-        print(f"Debug: Added seventh floor plan only, current paths: {image_paths}")
-        return image_paths
-    
-    # For other floors (1-4): Show only individual room images (no main floor plan)
-    if floor == "तळ मजला" or floor == "तळ":
-        # Check if room numbers exist in ground floor mapping
-        for room_num in room_numbers:
-            for key, value in ground_floor_rooms.items():
-                if key == room_num:
-                    image_paths.append(f"floor_plans/ground_floor/{value}")
-                    break
-    
-    elif floor == "पहिला मजला" or floor == "पहिला":
-        # Check if room numbers exist in first floor mapping
-        for room_num in room_numbers:
-            print(f"Debug: Checking room number: {room_num}")
-            for key, value in first_floor_rooms.items():
-                if key == room_num:
-                    image_paths.append(f"floor_plans/first_floor/{value}")
-                    print(f"Debug: Added specific room image: floor_plans/first_floor/{value}")
-                    break
-    
-    elif floor == "दुसरा मजला" or floor == "दुसरा":
-        # Check if room numbers exist in second floor mapping
-        for room_num in room_numbers:
-            for key, value in second_floor_rooms.items():
-                if key == room_num:
-                    image_paths.append(f"floor_plans/second_floor/{value}")
-                    break
-    
-    elif floor == "तिसरा मजला" or floor == "तिसरा":
-        # Check if room numbers exist in third floor mapping
-        for room_num in room_numbers:
-            for key, value in third_floor_rooms.items():
-                if key == room_num:
-                    image_paths.append(f"floor_plans/third_floor/{value}")
-                    break
-    
-    elif floor == "चौथा मजला" or floor == "चौथा":
-        # Check if room numbers exist in fourth floor mapping
-        for room_num in room_numbers:
-            for key, value in fourth_floor_rooms.items():
-                if key == room_num:
-                    image_paths.append(f"floor_plans/fourth_floor/{value}")
-                    break
-    
-    # Return list of image paths, or None if no images found
-    print(f"Debug: Final image paths: {image_paths}")
-    return image_paths if image_paths else None
-
-# Common corrections for names
-name_corrections = {
-    "मुख्र्": "मुख्य",
-    "हदपक": "दिपक",
-    "प्रशाांत": "प्रशांत",
-    "रुभ": "रूम",
-    "नां.": "",
-    "िुमाळ": "कुमार",
-}
-# Provided data
-data = [
+[
     {
         "पद": "पोस्टमास्तर - ग्रेड 2",
         "कार्यालयाचे नाव": "कोकण भवन, नवी मुंबई",
@@ -772,6 +369,69 @@ data = [
         "शेरा": "जोड इमारत पनवेल बाजू"
     },
     {
+        "पद": "वैद्यकीय अधिकारी",
+        "कार्यालयाचे नाव": "शासकीय दवाखाना, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "जी-14-15",
+        "नाव": "डॉ. गणेश धुमाळ",
+        "मोबाईल क्रमांक": "9819482852",
+        "मजला": "तळ मजला",
+        "शेरा": "जोड इमारत सिडको बाजू"
+    },
+    {
+        "पद": "कोषागार अधिकारी",
+        "कार्यालयाचे नाव": "उप कोषागार कार्यालय, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "जी 16",
+        "नाव": "श्रीमती जास्मिन शेख",
+        "मोबाईल क्रमांक": "8828054223",
+        "मजला": "तळ मजला",
+        "शेरा": "जोड इमारत सिडको बाजू"
+    },
+    {
+        "पद": "सहायक पोलीस आयुक्त(वाहतूक)",
+        "कार्यालयाचे नाव": "वाहतूक विभाग, नवी मुंबई",
+        "कार्यालय क्रमांक": "जी -1",
+        "नाव": "श्री विठठल कुबडे",
+        "मोबाईल क्रमांक": "9764197977",
+        "मजला": "तळ मजला",
+        "शेरा": "मुख्य इमारत सिडको बाजू"
+    },
+    {
+        "पद": "बालविकास प्रकल्प अधिकारी",
+        "कार्यालयाचे नाव": "नागरी प्रकल्प तुर्भे-पनवेल, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "जी -17",
+        "नाव": "श्रीमती ज्योती सदानंद पाटील",
+        "मोबाईल क्रमांक": "9834985848",
+        "मजला": "तळ मजला",
+        "शेरा": "जोड इमारत सिडको बाजू"
+    },
+    {
+        "पद": "सहचिटणीस / उपाध्यक्ष",
+        "कार्यालयाचे नाव": "राज्य सरकारी कर्मचारी संघटना, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "जी- 20",
+        "नाव": "श्री मोरश्वर चौधरी / श्रीमती अस्मिता जोशी",
+        "मोबाईल क्रमांक": "9067772222 / 7208367956",
+        "मजला": "तळ मजला",
+        "शेरा": "जोड इमारत पनवेल बाजू"
+    },
+    {
+        "पद": "उद्यान अधिक्षक",
+        "कार्यालयाचे नाव": "उपवने व उद्याने",
+        "कार्यालय क्रमांक": "जी-08",
+        "नाव": "श्री विशाल भोर",
+        "मोबाईल क्रमांक": "8329358136",
+        "मजला": "तळ मजला",
+        "शेरा": "मुख्य इमारत"
+    },
+    {
+        "पद": "विभागीय आयुक्त",
+        "कार्यालयाचे नाव": "कोकण विभाग",
+        "कार्यालय क्रमांक": "रूम नं. 101",
+        "नाव": "डॉ. विजय सूर्यवंशी",
+        "मोबाईल क्रमांक": "---",
+        "मजला": "पहिला मजला",
+        "शेरा": "मुख्य इमारत"
+    },
+    {
         "पद": "स्वीय सहाय्यक",
         "कार्यालयाचे नाव": "मा.विभागीय आयुक्त यांचे स्वीय सहाय्यक कक्ष",
         "कार्यालय क्रमांक": "रूम नं. 101 अ",
@@ -826,6 +486,24 @@ data = [
         "शेरा": "मुख्य इमारत पनवेल बाजू"
     },
     {
+        "पद": "अपर आयुक्त",
+        "कार्यालयाचे नाव": "विकास शाखा",
+        "कार्यालय क्रमांक": "रूम नं 110",
+        "नाव": "डॉ. माणिक नामदेव दिवे",
+        "मोबाईल क्रमांक": "8080149740",
+        "मजला": "पहिला मजला",
+        "शेरा": "मुख्य इमारत"
+    },
+    {
+        "पद": "अपर आयुक्त",
+        "कार्यालयाचे नाव": "विकास आस्थापना",
+        "कार्यालय क्रमांक": "रूम नं. 111 व 112",
+        "नाव": "श्रीमती मिनल कुटे",
+        "मोबाईल क्रमांक": "9096390700",
+        "मजला": "पहिला मजला",
+        "शेरा": "मुख्य इमारत"
+    },
+    {
         "पद": "अपर आयुक्त(महसूल)",
         "कार्यालयाचे नाव": "महसूल आस्थापना",
         "कार्यालय क्रमांक": "रूम नं. 113 ते 116",
@@ -833,6 +511,60 @@ data = [
         "मोबाईल क्रमांक": "9422607907",
         "मजला": "पहिला मजला",
         "शेरा": "जोड इमारत सिडको बाजू"
+    },
+    {
+        "पद": "सह आयुक्त करमणूक कर",
+        "कार्यालयाचे नाव": "करमणूक शुल्क शाखा",
+        "कार्यालय क्रमांक": "रूम नं.117",
+        "नाव": "श्री. रवींद्र पवार",
+        "मोबाईल क्रमांक": "901130332",
+        "मजला": "पहिला मजला",
+        "शेरा": "जोड इमारत सिडको बाजू"
+    },
+    {
+        "पद": "---",
+        "कार्यालयाचे नाव": "लेखामेळ शाखा",
+        "कार्यालय क्रमांक": "रूम नं.118",
+        "नाव": "श्री. दिपक काटे",
+        "मोबाईल क्रमांक": "9082790027",
+        "मजला": "पहिला मजला",
+        "शेरा": "जोड इमारत सिडको बाजू"
+    },
+    {
+        "पद": "सह आयुक्त, नगर परिषद प्रशासन",
+        "कार्यालयाचे नाव": "नगरपालिका प्रशासन शाखा",
+        "कार्यालय क्रमांक": "रूम नं.119",
+        "नाव": "श्री. विजयकुमार म्हसाळ",
+        "मोबाईल क्रमांक": "9173039955",
+        "मजला": "पहिला मजला",
+        "शेरा": "जोड इमारत पनवेल बाजू"
+    },
+    {
+        "पद": "विधी अधिकारी",
+        "कार्यालयाचे नाव": "विधी अधिकारी",
+        "कार्यालय क्रमांक": "रूम नं 119 ब",
+        "नाव": "श्रीमती आश्विनी शैलेश उगले",
+        "मोबाईल क्रमांक": "7304764297",
+        "मजला": "पहिला मजला",
+        "शेरा": "जोड इमारत पनवेल बाजू"
+    },
+    {
+        "पद": "जिल्हा उप निबंधक",
+        "कार्यालयाचे नाव": "सहकारी संस्था (2) पूर्व उपनगरे मुंबई, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.- 201",
+        "नाव": "श्री नितीन दहिभाते",
+        "मोबाईल क्रमांक": "9785180696",
+        "मजला": "दुसरा मजला",
+        "शेरा": "मुख्य इमारत"
+    },
+    {
+        "पद": "उप निबंधक सहकारी संस्था (एम विभाग)",
+        "कार्यालयाचे नाव": "सहकारी संस्था एम विभाग, मुंबई कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.-202",
+        "नाव": "श्री सुनिल बनसोडे / श्री अजयकुमार भालके",
+        "मोबाईल क्रमांक": "9975085806 / 9324262877",
+        "मजला": "दुसरा मजला",
+        "शेरा": "मुख्य इमारत"
     },
     {
         "पद": "---",
@@ -853,6 +585,51 @@ data = [
         "शेरा": "मुख्य इमारत"
     },
     {
+        "पद": "सहायक ग्रंथालय संचालक",
+        "कार्यालयाचे नाव": "मुंबई विभाग, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.-218",
+        "नाव": "श्री प्रशांत पाटील",
+        "मोबाईल क्रमांक": "9022074560",
+        "मजला": "दुसरा मजला",
+        "शेरा": "जोड इमारत पनवेल बाजू"
+    },
+    {
+        "पद": "सहायक व्यवस्थापक",
+        "कार्यालयाचे नाव": "दि महाराष्ट्र मंत्रालय व संलग्न शासकीय कर्मचारी को. ऑपरेटिव्ह क्रेडीट सोसायटी",
+        "कार्यालय क्रमांक": "रूम नं.-217",
+        "नाव": "श्री महेंद्र वा. पडवळ",
+        "मोबाईल क्रमांक": "977377881",
+        "मजला": "दुसरा मजला",
+        "शेरा": "जोड इमारत पनवेल बाजू"
+    },
+    {
+        "पद": "नगर रचनाकार",
+        "कार्यालयाचे नाव": "सहायक संचालक नगररचना(मुल्यांकन) ठाणे, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.-213",
+        "नाव": "श्री रविंद्र पांडूरंग बनसोडे",
+        "मोबाईल क्रमांक": "9422425085",
+        "मजला": "दुसरा मजला",
+        "शेरा": "जोड इमारत सिडको बाजू"
+    },
+    {
+        "पद": "---",
+        "कार्यालयाचे नाव": "शासकीय पुर्ननियुक्त माजी सैनिक संघटना, महाराष्ट्र",
+        "कार्यालय क्रमांक": "रूम नं 214",
+        "नाव": "श्री अजित न्यायनिर्गुणे",
+        "मोबाईल क्रमांक": "9969251300",
+        "मजला": "दुसरा मजला",
+        "शेरा": "जोड इमारत पनवेल बाजू"
+    },
+    {
+        "पद": "कार्यकारी अभियंता",
+        "कार्यालयाचे नाव": "रायगड पाटबंधारे विभाग क्र.02, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.-301/302",
+        "नाव": "श्री संजीव जाधव",
+        "मोबाईल क्रमांक": "9029165504",
+        "मजला": "तिसरा मजला",
+        "शेरा": "मुख्य इमारत"
+    },
+    {
         "पद": "कनिष्ठ वैज्ञानिक अधिकारी",
         "कार्यालयाचे नाव": "सार्वजनिक आरोग्य प्रयोगशाळा (पाणी नमूने तपासणी), कोकण भवन, नवी मुंबई",
         "कार्यालय क्रमांक": "रूम नं.-307",
@@ -862,11 +639,56 @@ data = [
         "शेरा": "मुख्य इमारत"
     },
     {
+        "पद": "विभागीय सहनिबंधक",
+        "कार्यालयाचे नाव": "सहकारी संस्था कोकण विभाग, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.-308/309/310",
+        "नाव": "श्री मिलींद सेन भालेराव",
+        "मोबाईल क्रमांक": "9527821642",
+        "मजला": "तिसरा मजला",
+        "शेरा": "मुख्य इमारत"
+    },
+    {
+        "पद": "सह संचालक नगररचना",
+        "कार्यालयाचे नाव": "कोकण विभाग कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.-305",
+        "नाव": "श्री श्रीकांत देशमुख",
+        "मोबाईल क्रमांक": "9423776145",
+        "मजला": "तिसरा मजला",
+        "शेरा": "मुख्य इमारत"
+    },
+    {
+        "पद": "प्रभारी सहायक भाषा संचालक",
+        "कार्यालयाचे नाव": "विभागीय सहायक भाषा संचालक, भाषा संचालनालय कोकण विभाग, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.-315",
+        "नाव": "श्रीमती आरती वेलिंग",
+        "मोबाईल क्रमांक": "9869002532",
+        "मजला": "तिसरा मजला",
+        "शेरा": "जोड इमारत पनवेल बाजू"
+    },
+    {
         "पद": "उप संचालक",
         "कार्यालयाचे नाव": "भूजल सर्वेक्षण आणि विकास यंत्रणा (प्रयोगशाळा), कोकण भवन, नवी मुंबई",
         "कार्यालय क्रमांक": "रूम नं.-312 ते 314",
         "नाव": "श्री नितीन पुरषोत्तम दहिकर",
         "मोबाईल क्रमांक": "9623641368",
+        "मजला": "तिसरा मजला",
+        "शेरा": "जोड इमारत सिडको बाजू"
+    },
+    {
+        "पद": "प्र.उपसंचालक (माहिती)",
+        "कार्यालयाचे नाव": "विभागीय माहिती कार्यालय कोकण विभाग कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.-317",
+        "नाव": "श्रीमती अर्चना शंभरकर",
+        "मोबाईल क्रमांक": "9987037103",
+        "मजला": "तिसरा मजला",
+        "शेरा": "जोड इमारत पनवेल बाजू"
+    },
+    {
+        "पद": "उप उपनिबंधक सहकारी संस्था",
+        "कार्यालयाचे नाव": "एल/एन विभाग, मुंबई कोकण विभाग कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.-311",
+        "नाव": "श्रीमती प्रियंका गाडीलकर / श्री हरिश जगताप / श्री शिरीष सपकाळ",
+        "मोबाईल क्रमांक": "9823625000 / 9071081772",
         "मजला": "तिसरा मजला",
         "शेरा": "जोड इमारत सिडको बाजू"
     },
@@ -887,6 +709,15 @@ data = [
         "मोबाईल क्रमांक": "7710004878",
         "मजला": "चौथा मजला",
         "शेरा": "मुख्य इमारत"
+    },
+    {
+        "पद": "अधिक्षक अभियंता",
+        "कार्यालयाचे नाव": "दक्षता व गुणनियंत्रण मंडळ, कोकण भवन, नवी मुंबई",
+        "कार्यालय क्रमांक": "रूम नं.-515, 516, 518",
+        "नाव": "श्री सुरेंद्र लक्ष्मण टोपले",
+        "मोबाईल क्रमांक": "9869334390",
+        "मजला": "पाचवा मजला",
+        "शेरा": "जोड इमारत पनवेल बाजू"
     },
     {
         "पद": "कार्यकारी संचालक",
@@ -1392,350 +1223,5 @@ data = [
         "मजला": "सातवा मजला",
         "शेरा": "विस्तार इमारत"
     }
+    
 ]
-
-# Create DataFrame
-df = pd.DataFrame(data)
-df = df.rename(columns={
-    "मजला": "मजला",
-    "कार्यालयाचे नाव": "कार्यालयाचे नाव",
-    "दूरध्वनी क्रमांक": "दूरध्वनी क्रमांक",
-    "नाव": "कार्यालय प्रमुखाचे नाव",
-    "मोबाईल क्रमांक": "मोबाईल क्रमांक",
-    "शेरा": "शेरा",
-    "रूम नं.": "रूम नं."
-})
-
-# Apply name corrections
-df["कार्यालय प्रमुखाचे नाव"] = df["कार्यालय प्रमुखाचे नाव"].apply(
-    lambda x: "".join([name_corrections.get(word, word) for word in str(x).split()]) if pd.notna(x) else x
-)
-
-# Authentication
-@app.route('/', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        user_id = request.form.get('userId')
-        password = request.form.get('password')
-        if user_id == 'admin' and password == '5555':  # Hardcoded for simplicity; use environment variables in production
-            return redirect(url_for('directory'))
-        return render_template('index.html', error="अवैध पासवर्ड. कृपया पुन्हा प्रयत्न करा.")
-    return render_template('index.html')
-
-# Directory page
-@app.route('/directory')
-def directory():
-    return render_template('directory.html', departments=sorted(df["पद"].dropna().unique()), people=sorted(df["कार्यालय प्रमुखाचे नाव"].dropna().unique()))
-
-# API endpoint for search
-@app.route('/api/search', methods=['POST'])
-def search():
-    try:
-        query = request.json.get('query')
-        if not query:
-            return jsonify({"error": "Query is required"}), 400
-        
-        print(f"Debug: Received query: '{query}'")  # Debug line
-        
-        # Filter data based on exact match of 'पद', 'कार्यालय प्रमुखाचे नाव', or 'कार्यालय क्रमांक'
-        # Escape special regex characters in the query
-        import re
-        escaped_query = re.escape(query)
-        filtered_data = df[
-            (df["पद"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True)) |
-            (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True)) |
-            (df["कार्यालय क्रमांक"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True))
-        ]
-        # Exclude 'मोबाईल क्रमांक' from the output
-        filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
-        
-        room_image_paths = []
-        if not filtered_data.empty:
-            # Check if we have room information to display specific room images
-            for _, row in filtered_data.iterrows():
-                office_number = row.get("कार्यालय क्रमांक")
-                floor = row.get("मजला")
-                
-                print(f"Debug: Office number: {office_number}, Floor: {floor}")  # Debug line
-                
-                if office_number and floor:
-                    room_numbers = extract_room_number(office_number)
-                    print(f"Debug: Extracted room numbers: {room_numbers}")  # Debug line
-                    
-                    if room_numbers:
-                        current_room_images = get_room_image(room_numbers, floor)
-                        print(f"Debug: Room image paths for this record: {current_room_images}")  # Debug line
-                        if current_room_images:
-                            room_image_paths.extend(current_room_images)
-                    else:
-                        # If no specific room numbers, still try to get floor plan
-                        current_floor_images = get_room_image([], floor)
-                        print(f"Debug: Floor plan paths for this record: {current_floor_images}")  # Debug line
-                        if current_floor_images:
-                            room_image_paths.extend(current_floor_images)
-            
-            # Remove duplicates and convert to None if empty
-            room_image_paths = list(set(room_image_paths)) if room_image_paths else None
-            print(f"Debug: Final combined room image paths: {room_image_paths}")  # Debug line
-            
-            result = "\n".join(
-                filtered_data.apply(
-                    lambda row: "\n".join([f"- {k}: {v}" for k, v in row.dropna().items()]), axis=1
-                )
-            )
-        else:
-            result = "माहिती उपलब्ध नाही"
-        
-        audio_base64 = get_audio_file(result)
-        return jsonify({
-            "result": result, 
-            "audio": audio_base64,
-            "room_image": room_image_paths
-        })
-    
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# Function to get audio file
-def get_audio_file(text):
-    try:
-        tts = gTTS(text=text, lang='mr')
-        audio_file = io.BytesIO()
-        tts.write_to_fp(audio_file)
-        audio_file.seek(0)
-        return base64.b64encode(audio_file.read()).decode('utf-8')
-    except Exception as e:
-        print(f"Error generating audio: {e}")
-        return ""
-
-# Audio endpoint (for compatibility)
-@app.route('/get_audio', methods=['POST'])
-def get_audio():
-    try:
-        data = request.json
-        text = data.get('text', '')
-        audio_base64 = get_audio_file(text)
-        return jsonify({"audio": audio_base64})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# QR Code generation endpoint
-@app.route('/generate_qr', methods=['POST'])
-def generate_qr():
-    try:
-        data = request.json
-        query = data.get('query', '')
-        
-        if not query:
-            return jsonify({"error": "Query is required"}), 400
-        
-        # Search for the office details
-        filtered_data = df[
-            (df["पद"].astype(str).str.contains(re.escape(query), case=False, na=False, regex=True)) |
-            (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(re.escape(query), case=False, na=False, regex=True)) |
-            (df["कार्यालय क्रमांक"].astype(str).str.contains(re.escape(query), case=False, na=False, regex=True))
-        ]
-        
-        if filtered_data.empty:
-            return jsonify({"error": "माहिती सापडली नाही"}), 404
-        
-        # Exclude mobile numbers from QR content
-        filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
-        
-        # Get room images for the content
-        room_image_paths = []
-        for _, row in filtered_data.iterrows():
-            office_number = row.get("कार्यालय क्रमांक")
-            floor = row.get("मजला")
-            
-            if office_number and floor:
-                room_numbers = extract_room_number(office_number)
-                if room_numbers:
-                    current_room_images = get_room_image(room_numbers, floor)
-                    if current_room_images:
-                        room_image_paths.extend(current_room_images)
-                else:
-                    # If no specific room numbers, get floor plan
-                    current_floor_images = get_room_image([], floor)
-                    if current_floor_images:
-                        room_image_paths.extend(current_floor_images)
-        
-        # Remove duplicates
-        room_image_paths = list(set(room_image_paths)) if room_image_paths else []
-        
-        # Format the content for mobile display
-        content = "\n".join(
-            filtered_data.apply(
-                lambda row: "\n".join([f"- {k}: {v}" for k, v in row.dropna().items()]), axis=1
-            )
-        )
-        
-        # Add room images to content if available
-        if room_image_paths:
-            content += "\n\n- मजला नकाशा: उपलब्ध आहे"
-        
-        # Generate a unique session ID
-        session_id = str(uuid.uuid4())
-        
-        # Create mobile display URL using ngrok URL for mobile access
-        mobile_url = f"https://f9317ab52f51.ngrok-free.app/mobile_display/{session_id}"
-        
-        # Store the content in a simple way (in production, use a database)
-        # For now, we'll pass it as a parameter with proper URL encoding
-        import urllib.parse
-        content_b64 = base64.b64encode(content.encode('utf-8')).decode('utf-8')
-        mobile_url_with_content = f"{mobile_url}?content={urllib.parse.quote(content_b64)}"
-        
-        # Generate QR code with smaller size
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=6,  # Smaller box size
-            border=2,    # Smaller border
-        )
-        qr.add_data(mobile_url_with_content)
-        qr.make(fit=True)
-        
-        # Create QR code image
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        # Convert to base64
-        img_buffer = io.BytesIO()
-        img.save(img_buffer, format='PNG')
-        img_buffer.seek(0)
-        qr_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
-        
-        return jsonify({
-            "qr_code": qr_base64,
-            "mobile_url": mobile_url_with_content,
-            "session_id": session_id
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# Mobile display endpoint
-@app.route('/mobile_display/<session_id>')
-def mobile_display(session_id):
-    try:
-        # Get content from URL parameter and URL decode it
-        content_b64_encoded = request.args.get('content', '')
-        
-        if not content_b64_encoded:
-            return render_template('mobile_display.html', 
-                                 content="<p style='color: #f44336; text-align: center;'>त्रुटी: माहिती उपलब्ध नाही</p>")
-        
-        # URL decode the base64 string first
-        import urllib.parse
-        content_b64 = urllib.parse.unquote(content_b64_encoded)
-        
-        # Decode content
-        content = base64.b64decode(content_b64).decode('utf-8')
-        
-        # Format content for better display
-        formatted_content = format_mobile_content(content)
-        
-        # Check if content mentions floor plans and add images using the same logic as main app
-        room_images_html = ""
-        if "मजला नकाशा: उपलब्ध आहे" in content:
-            # Parse the content to extract office information like the main app does
-            room_image_paths = []
-            
-            # Split content by office entries (each starts with "- पद:")
-            office_entries = re.split(r'\n- पद:', content)
-            
-            for entry in office_entries:
-                if not entry.strip():
-                    continue
-                    
-                # Add back the "- पद:" prefix if it was removed
-                if not entry.startswith('- पद:'):
-                    entry = '- पद:' + entry
-                
-                # Extract office number and floor from this entry
-                office_match = re.search(r'- कार्यालय क्रमांक:\s*([^\n]+)', entry)
-                floor_match = re.search(r'- मजला:\s*([^\n]+)', entry)
-                
-                if office_match and floor_match:
-                    office_number = office_match.group(1).strip()
-                    floor = floor_match.group(1).strip()
-                    
-                    # Use the same logic as main app
-                    room_numbers = extract_room_number(office_number)
-                    if room_numbers:
-                        current_room_images = get_room_image(room_numbers, floor)
-                        if current_room_images:
-                            room_image_paths.extend(current_room_images)
-                    else:
-                        # If no specific room numbers, still try to get floor plan
-                        current_floor_images = get_room_image([], floor)
-                        if current_floor_images:
-                            room_image_paths.extend(current_floor_images)
-            
-            # Remove duplicates
-            room_image_paths = list(set(room_image_paths)) if room_image_paths else []
-            
-            # Generate HTML for all images
-            if room_image_paths:
-                room_images_html = "<div class='floor-plans'><h4>🏢 मजला नकाशा:</h4>"
-                for img_path in room_image_paths:
-                    # Ensure the path starts with /static/
-                    if not img_path.startswith('/static/'):
-                        img_path = '/static/' + img_path
-                    room_images_html += f"<img src='{img_path}' alt='Floor Plan' class='floor-plan-img'>"
-                room_images_html += "</div>"
-        
-        return render_template('mobile_display.html', content=formatted_content, room_images=room_images_html)
-        
-    except Exception as e:
-        return render_template('mobile_display.html', 
-                             content=f"<p style='color: #f44336; text-align: center;'>त्रुटी: {str(e)}</p>")
-
-def get_floor_plan_images(floor):
-    """Get floor plan images based on floor name"""
-    floor_lower = floor.lower()
-    
-    if "तळ" in floor_lower or "ground" in floor_lower:
-        return ["/static/floor_plans/ground_floor/"]  # Ground floor directory
-    elif "पहिला" in floor_lower or "first" in floor_lower or "1" in floor_lower:
-        return ["/static/floor_plans/first_floor/"]  # First floor directory
-    elif "दुसरा" in floor_lower or "second" in floor_lower or "2" in floor_lower:
-        return ["/static/floor_plans/second_floor/"]  # Second floor directory
-    elif "तिसरा" in floor_lower or "third" in floor_lower or "3" in floor_lower:
-        return ["/static/floor_plans/third_floor/"]  # Third floor directory
-    elif "चौथा" in floor_lower or "fourth" in floor_lower or "4" in floor_lower:
-        return ["/static/floor_plans/fourth_floor/"]  # Fourth floor directory
-    elif "पाचवा" in floor_lower or "fifth" in floor_lower or "5" in floor_lower:
-        return ["/static/floor_plans/fifth_floor.jpg"]  # Direct fifth floor image
-    elif "सहावा" in floor_lower or "sixth" in floor_lower or "6" in floor_lower:
-        return ["/static/floor_plans/sixth_floor.jpg"]  # Direct sixth floor image
-    elif "सातवा" in floor_lower or "seventh" in floor_lower or "7" in floor_lower:
-        return ["/static/floor_plans/seventh_floor.jpg"]  # Direct seventh floor image
-    else:
-        return ["/static/floor_plans/fifth_floor.jpg"]  # Default fallback
-
-def format_mobile_content(content):
-    """Format content for mobile display"""
-    lines = content.split('\n')
-    formatted_lines = []
-    
-    for line in lines:
-        if line.strip():
-            if line.startswith('- '):
-                # Format as a proper field
-                field = line[2:]  # Remove '- '
-                if ':' in field:
-                    key, value = field.split(':', 1)
-                    formatted_lines.append(f"<strong style='color: #667eea;'>{key.strip()}:</strong> {value.strip()}")
-                else:
-                    formatted_lines.append(f"<div style='margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea;'>{field}</div>")
-            else:
-                formatted_lines.append(f"<div style='margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea;'>{line}</div>")
-        else:
-            formatted_lines.append("<br>")
-    
-    return '<br>'.join(formatted_lines)
-
-if __name__ == '__main__':
-    port = int(os.getenv("PORT", 5009))
-    app.run(host='0.0.0.0', port=port, debug=False)
