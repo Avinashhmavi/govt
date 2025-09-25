@@ -1272,8 +1272,8 @@ def generate_qr():
         # Generate a unique session ID
         session_id = str(uuid.uuid4())
         
-        # Create mobile display URL using network IP for mobile access
-        mobile_url = f"http://192.168.1.12:5009/mobile_display/{session_id}"
+        # Create mobile display URL using ngrok URL for mobile access
+        mobile_url = f"https://f9317ab52f51.ngrok-free.app/mobile_display/{session_id}"
         
         # Store the content in a simple way (in production, use a database)
         # For now, we'll pass it as a parameter with proper URL encoding
