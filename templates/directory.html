@@ -614,6 +614,20 @@
             }
         }
 
+        /* Enhanced QR Button Styles */
+        button[onclick*="generateQRCode"]:hover {
+            transform: translateY(-3px) !important;
+            box-shadow: 0 12px 32px rgba(102, 126, 234, 0.4) !important;
+        }
+
+        button[onclick*="generateQRCode"]:active {
+            transform: translateY(-1px) !important;
+        }
+
+        button[onclick*="generateQRCode"]:hover > div {
+            left: 100% !important;
+        }
+
         /* Image Modal Styles */
         .image-modal {
             display: none;
@@ -812,7 +826,7 @@
             });
         }
 
-        function showResult(section, result, audioData, roomImagePath, query) {
+        function showResult(section, result, audioData, roomImagePath, query, roomVideoUrl) {
             const resultDiv = document.getElementById(`${section}Result`);
             const statusDiv = document.getElementById(`${section}Status`);
             const audioElement = document.getElementById(`${section}Audio`);
@@ -821,7 +835,7 @@
             
             if (result) {
                 resultDiv.style.display = 'block';
-                resultDiv.innerHTML = formatResult(result, roomImagePath, query);
+                resultDiv.innerHTML = formatResult(result, roomImagePath, query, roomVideoUrl);
             }
             
             if (audioData) {
@@ -867,9 +881,10 @@
             resultDiv.innerHTML = `<div class="error">${error}</div>`;
         }
 
-        function formatResult(text, roomImagePath, query) {
+        function formatResult(text, roomImagePath, query, roomVideoUrl) {
             let content = '';
             let images = '';
+            let video = '';
             
             const lines = text.split('\n');
             for (let line of lines) {
@@ -933,21 +948,54 @@
                 images += '</div>';
             }
             
-            // Add QR code generation button
-            let qrButton = '';
-            if (query) {
-                qrButton = `
-                    <div style="margin-top: 20px; text-align: center; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 12px; border: 2px solid #e9ecef;">
-                        <h4 style="color: #667eea; margin-bottom: 12px; font-size: 16px;">📱 मोबाइलसाठी QR कोड</h4>
-                        <p style="margin-bottom: 15px; color: #6c757d; font-size: 14px;">ही माहिती मोबाइलवर 30 मिनिटांसाठी पाहण्यासाठी QR कोड जनरेट करा</p>
-                        <button onclick="generateQRCode('${query.replace(/'/g, "\\'")}')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
-                            📱 QR कोड जनरेट करा
-                        </button>
+            // Add room video if available
+            if (roomVideoUrl) {
+                // Convert Google Drive share link to embeddable format
+                const embedUrl = roomVideoUrl.replace('/file/d/', '/file/d/').replace('/view?usp=drive_link', '/preview');
+                
+                video = `
+                    <div style="margin-top: 20px; text-align: center; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 16px; border: 2px solid #e9ecef; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);">
+                        <h4 style="color: #667eea; margin-bottom: 16px; font-size: 18px;">🎥 रूम व्हिडिओ</h4>
+                        <p style="margin-bottom: 16px; color: #6c757d; font-size: 14px;">रूम नकाशासाठी व्हिडिओ पहा</p>
+                        <div style="position: relative; width: 100%; max-width: 600px; margin: 0 auto;">
+                            <iframe 
+                                src="${embedUrl}" 
+                                width="100%" 
+                                height="400" 
+                                frameborder="0" 
+                                allowfullscreen
+                                style="border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);"
+                                allow="autoplay; encrypted-media">
+                            </iframe>
+                        </div>
                     </div>
                 `;
             }
             
-            return content.trim() + images + qrButton;
+            // Add QR code generation button
+            let qrButton = '';
+            if (query) {
+                qrButton = `
+                    <div style="margin-top: 20px; text-align: center; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 16px; border: 2px solid #e9ecef; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08); position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #667eea, #764ba2, #667eea); background-size: 200% 100%; animation: shimmer 3s ease-in-out infinite;"></div>
+                        <h4 style="color: #667eea; margin-bottom: 12px; font-size: 18px; font-weight: 700; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);">📱 मोबाइलसाठी QR कोड</h4>
+                        <p style="margin-bottom: 20px; color: #6c757d; font-size: 14px; line-height: 1.5;">ही माहिती मोबाइलवर 30 मिनिटांसाठी पाहण्यासाठी QR कोड जनरेट करा</p>
+                        <button onclick="generateQRCode('${query.replace(/'/g, "\\'")}')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 32px; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3); position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 8px; font-family: inherit;">
+                            <span style="font-size: 18px;">📱</span>
+                            <span>QR कोड जनरेट करा</span>
+                            <div style="position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent); transition: left 0.6s ease;"></div>
+                        </button>
+                        <div style="margin-top: 12px; font-size: 12px; color: #6c757d; opacity: 0.8;">
+                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                <span>⚡</span>
+                                <span>त्वरित आणि सुरक्षित</span>
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return content.trim() + images + video + qrButton;
         }
 
         async function searchByDepartment() {
@@ -979,7 +1027,7 @@
                 if (data.error) {
                     showError('department', data.error);
                 } else {
-                    showResult('department', data.result, data.audio, data.room_image, dept);
+                    showResult('department', data.result, data.audio, data.room_image, dept, data.room_video_url);
                 }
             } catch (error) {
                 showError('department', `त्रुटी: ${error.message}`);
@@ -1019,7 +1067,7 @@
                 if (data.error) {
                     showError('person', data.error);
                 } else {
-                    showResult('person', data.result, data.audio, data.room_image, person);
+                    showResult('person', data.result, data.audio, data.room_image, person, data.room_video_url);
                 }
             } catch (error) {
                 showError('person', `त्रुटी: ${error.message}`);
@@ -1060,10 +1108,11 @@
                     console.log('Recognized query:', query);
                     
                     try {
-                        const response = await fetch('/api/search', {
+                        // Use OpenAI-powered voice analysis endpoint
+                        const response = await fetch('/api/voice_analysis', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ query: query })
+                            body: JSON.stringify({ voice_text: query })
                         });
                         
                         const data = await response.json();
@@ -1071,7 +1120,22 @@
                         if (data.error) {
                             showError('voice', data.error);
                         } else {
-                            showResult('voice', data.result, data.audio, data.room_image, query);
+                            // Show enhanced result with OpenAI analysis info
+                            let enhancedResult = data.result;
+                            if (data.original_voice && data.analyzed_query) {
+                                if (data.original_voice !== data.analyzed_query) {
+                                    enhancedResult = `🎤 मूळ व्हॉइस: ${data.original_voice}\n🤖 AI विश्लेषण: ${data.analyzed_query}\n\n${data.result}`;
+                                } else {
+                                    enhancedResult = `🎤 व्हॉइस इनपुट: ${data.original_voice}\n\n${data.result}`;
+                                }
+                            }
+                            
+                            // If no results found, show helpful message
+                            if (data.result === "माहिती उपलब्ध नाही") {
+                                enhancedResult = `🎤 व्हॉइस इनपुट: ${data.original_voice}\n🤖 AI विश्लेषण: ${data.analyzed_query}\n\n❌ माहिती सापडली नाही. कृपया खालीलपैकी एक प्रयत्न करा:\n• पदाचे नाव सांगा (उदा: विभागीय आयुक्त)\n• व्यक्तीचे नाव सांगा (उदा: डॉ. विजय सूर्यवंशी)\n• रूम नंबर सांगा (उदा: रूम 101)\n• मजल्याचे नाव सांगा (उदा: पहिला मजला)`;
+                            }
+                            
+                            showResult('voice', enhancedResult, data.audio, data.room_image, query, data.room_video_url);
                         }
                     } catch (error) {
                         showError('voice', `त्रुटी: ${error.message}`);
@@ -1111,6 +1175,18 @@
                 return;
             }
             
+            // Find the button and add loading state
+            const buttons = document.querySelectorAll('button[onclick*="generateQRCode"]');
+            const originalTexts = [];
+            
+            buttons.forEach((button, index) => {
+                originalTexts[index] = button.innerHTML;
+                button.innerHTML = '<span style="display: inline-flex; align-items: center; gap: 8px;"><div style="width: 16px; height: 16px; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;"></div><span>जनरेट करत आहे...</span></span>';
+                button.style.opacity = '0.7';
+                button.style.cursor = 'not-allowed';
+                button.disabled = true;
+            });
+            
             try {
                 const response = await fetch('/generate_qr', {
                     method: 'POST',
@@ -1127,6 +1203,14 @@
                 }
             } catch (error) {
                 alert(`त्रुटी: ${error.message}`);
+            } finally {
+                // Restore button states
+                buttons.forEach((button, index) => {
+                    button.innerHTML = originalTexts[index];
+                    button.style.opacity = '1';
+                    button.style.cursor = 'pointer';
+                    button.disabled = false;
+                });
             }
         }
 

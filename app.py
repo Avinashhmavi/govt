@@ -37,6 +37,41 @@ floor_mapping = {
     "सातवा": "seventh",
 }
 
+# Common English-Marathi translations for government positions
+position_translations = {
+    "divisional commissioner": "विभागीय आयुक्त",
+    "additional commissioner": "अपर आयुक्त",
+    "deputy commissioner": "सह आयुक्त",
+    "superintendent engineer": "अधिक्षक अभियंता",
+    "executive engineer": "कार्यकारी अभियंता",
+    "assistant engineer": "सहायक अभियंता",
+    "medical officer": "वैद्यकीय अधिकारी",
+    "district collector": "जिल्हाधिकारी",
+    "police commissioner": "पोलीस आयुक्त",
+    "police superintendent": "पोलीस अधिक्षक",
+    "deputy collector": "उप जिल्हाधिकारी",
+    "tehsildar": "तहसीलदार",
+    "mamlatdar": "मामलतदार",
+    "sarpanch": "सरपंच",
+    "mayor": "महापौर",
+    "commissioner": "आयुक्त",
+    "director": "संचालक",
+    "secretary": "सचिव",
+    "joint secretary": "संयुक्त सचिव",
+    "deputy secretary": "उप सचिव",
+    "under secretary": "सहायक सचिव",
+    "section officer": "शाखा अधिकारी",
+    "clerk": "लिपिक",
+    "peon": "चपरासी",
+    "driver": "चालक",
+    "sweeper": "सफाई कर्मचारी",
+    "guard": "रक्षक",
+    "watchman": "रक्षक"
+}
+
+# Reverse mapping for Marathi to English
+marathi_to_english = {v: k for k, v in position_translations.items()}
+
 # Room number mapping for all floors
 ground_floor_rooms = {
     "जी-1": "G-1.jpg",
@@ -390,6 +425,29 @@ def get_room_image(room_numbers, floor):
     # Return list of image paths, or None if no images found
     print(f"Debug: Final image paths: {image_paths}")
     return image_paths if image_paths else None
+
+def get_room_video_url(room_number):
+    """Get the video URL for specific room numbers"""
+    room_video_mapping = {
+        "जी-19": "https://drive.google.com/file/d/14FaXl3x-MPEHFv_1MMxDiXhpPaEv0PRn/view?usp=drive_link",
+        "G-19": "https://drive.google.com/file/d/14FaXl3x-MPEHFv_1MMxDiXhpPaEv0PRn/view?usp=drive_link",
+        "317": "https://drive.google.com/file/d/1UaueENAgj5hdlphGOUp3XemJiQY0x--H/view?usp=drive_link",
+        "315": "https://drive.google.com/file/d/1TATqhPHaFnTTXtze8tTWktHq-jabk2hv/view?usp=drive_link",
+        "301": "https://drive.google.com/file/d/1pjcPj1zcQMEMs1TwBTU3wcyvk8o8L4rY/view?usp=drive_link",
+        "301": "https://drive.google.com/file/d/1pjcPj1zcQMEMs1TwBTU3wcyvk8o8L4rY/view?usp=drive_link",
+        "217": "https://drive.google.com/file/d/1DJH2y0Yy7WaVzCuQUa7LU3CN83YKq2qr/view?usp=drive_link"
+    }
+    
+    # Check for exact match first
+    if room_number in room_video_mapping:
+        return room_video_mapping[room_number]
+    
+    # Check for partial matches (e.g., "301" should match "301(c)")
+    for key, url in room_video_mapping.items():
+        if key in str(room_number) or str(room_number) in key:
+            return url
+    
+    return None
 
 # Common corrections for names
 name_corrections = {
@@ -1425,7 +1483,22 @@ def login():
 # Directory page
 @app.route('/directory')
 def directory():
-    return render_template('directory.html', departments=sorted(df["पद"].dropna().unique()), people=sorted(df["कार्यालय प्रमुखाचे नाव"].dropna().unique()))
+    # Filter out "---" entries and sort them to the end
+    departments_list = df["पद"].dropna().unique()
+    people_list = df["कार्यालय प्रमुखाचे नाव"].dropna().unique()
+    
+    # Separate "---" entries from regular entries
+    regular_departments = [dept for dept in departments_list if dept != "---"]
+    dash_departments = [dept for dept in departments_list if dept == "---"]
+    
+    regular_people = [person for person in people_list if person != "---"]
+    dash_people = [person for person in people_list if person == "---"]
+    
+    # Sort regular entries and append "---" entries at the end
+    sorted_departments = sorted(regular_departments) + dash_departments
+    sorted_people = sorted(regular_people) + dash_people
+    
+    return render_template('directory.html', departments=sorted_departments, people=sorted_people)
 
 # API endpoint for search
 @app.route('/api/search', methods=['POST'])
@@ -1450,6 +1523,7 @@ def search():
         filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
         
         room_image_paths = []
+        room_video_url = None
         if not filtered_data.empty:
             # Check if we have room information to display specific room images
             for _, row in filtered_data.iterrows():
@@ -1467,6 +1541,14 @@ def search():
                         print(f"Debug: Room image paths for this record: {current_room_images}")  # Debug line
                         if current_room_images:
                             room_image_paths.extend(current_room_images)
+                            
+                            # Check if any room number has a video
+                            for room_num in room_numbers:
+                                video_url = get_room_video_url(room_num)
+                                if video_url:
+                                    room_video_url = video_url
+                                    print(f"Debug: Room {room_num} detected, video URL: {room_video_url}")
+                                    break
                     else:
                         # If no specific room numbers, still try to get floor plan
                         current_floor_images = get_room_image([], floor)
@@ -1490,7 +1572,8 @@ def search():
         return jsonify({
             "result": result, 
             "audio": audio_base64,
-            "room_image": room_image_paths
+            "room_image": room_image_paths,
+            "room_video_url": room_video_url
         })
     
     except Exception as e:
@@ -1519,6 +1602,289 @@ def get_audio():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# OpenAI-powered voice analysis endpoint
+@app.route('/api/voice_analysis', methods=['POST'])
+def voice_analysis():
+    try:
+        data = request.json
+        voice_text = data.get('voice_text', '')
+        
+        if not voice_text:
+            return jsonify({"error": "Voice text is required"}), 400
+        
+        print(f"Debug: Voice text received: '{voice_text}'")
+        
+        # Use OpenAI to analyze and improve the voice input
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": """You are an AI assistant for a government office directory system in Maharashtra, India. 
+                        Your task is to analyze voice input text (in Marathi or English) and extract the MOST SPECIFIC and RELEVANT search terms for finding office information.
+                        
+                        IMPORTANT RULES:
+                        1. Be SPECIFIC - avoid generic terms like "अधिकारी" (officer) alone
+                        2. Extract COMPLETE position names, not partial terms
+                        3. Handle both Marathi and English input
+                        4. Return ONLY the most relevant search terms
+                        
+                        The system contains specific positions like:
+                        - विभागीय आयुक्त (Divisional Commissioner)
+                        - अपर आयुक्त (Additional Commissioner) 
+                        - सह आयुक्त (Deputy Commissioner)
+                        - अधिक्षक अभियंता (Superintendent Engineer)
+                        - कोषागार अधिकारी (Treasury Officer)
+                        - वैद्यकीय अधिकारी (Medical Officer)
+                        - बालविकास प्रकल्प अधिकारी (Child Development Project Officer)
+                        - विधी अधिकारी (Legal Officer)
+                        - कनिष्ठ वैज्ञानिक अधिकारी (Junior Scientific Officer)
+                        
+                        When given voice input, extract the COMPLETE and SPECIFIC search terms:
+                        
+                        Examples:
+                        - "कोषागार अधिकारी" -> "कोषागार अधिकारी" (NOT just "अधिकारी")
+                        - "मला विभागीय आयुक्त शोधायचे आहे" -> "विभागीय आयुक्त"
+                        - "डॉ. विजय सूर्यवंशी यांची माहिती हवी" -> "डॉ. विजय सूर्यवंशी"
+                        - "रूम नंबर 101 मध्ये कोण आहे" -> "रूम नं. 101"
+                        - "पहिल्या मजल्यावर कोणते कार्यालय आहे" -> "पहिला मजला"
+                        - "I want to find Divisional Commissioner" -> "विभागीय आयुक्त"
+                        - "Room number 101" -> "रूम नं. 101"
+                        - "Treasury Officer" -> "कोषागार अधिकारी"
+                        - "Medical Officer" -> "वैद्यकीय अधिकारी"
+                        """
+                    },
+                    {
+                        "role": "user", 
+                        "content": f"Analyze this voice input and extract the best search terms: '{voice_text}'"
+                    }
+                ],
+                max_tokens=150,
+                temperature=0.2
+            )
+            
+            analyzed_query = response.choices[0].message.content.strip()
+            print(f"Debug: OpenAI analyzed query: '{analyzed_query}'")
+            
+        except Exception as openai_error:
+            print(f"OpenAI error: {openai_error}")
+            # Fallback to original voice text if OpenAI fails
+            analyzed_query = voice_text
+        
+        # Now search using the analyzed query with improved logic
+        import re
+        from difflib import SequenceMatcher
+        
+        def similarity(a, b):
+            return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+        
+        # Split analyzed query by commas to get multiple search terms
+        search_terms = [term.strip() for term in analyzed_query.split(',')]
+        
+        # Enhance search terms with translations
+        enhanced_search_terms = []
+        for term in search_terms:
+            enhanced_search_terms.append(term)
+            # Add English translation if term is in Marathi
+            if term in marathi_to_english:
+                enhanced_search_terms.append(marathi_to_english[term])
+            # Add Marathi translation if term is in English
+            term_lower = term.lower()
+            if term_lower in position_translations:
+                enhanced_search_terms.append(position_translations[term_lower])
+        
+        # Remove duplicates and empty terms
+        search_terms = list(set([term for term in enhanced_search_terms if term.strip()]))
+        
+        # Filter out overly generic terms that cause too many irrelevant results
+        generic_terms = ['अधिकारी', 'officer', 'कर्मचारी', 'employee', 'सेवक', 'servant']
+        filtered_search_terms = []
+        for term in search_terms:
+            # Only include generic terms if they're part of a longer, specific term
+            if term in generic_terms and len(term.split()) == 1:
+                print(f"Debug: Filtered out generic term: '{term}'")
+                continue
+            filtered_search_terms.append(term)
+        
+        search_terms = filtered_search_terms
+        print(f"Debug: Filtered search terms: {search_terms}")
+        
+        # Try each search term and collect results with ranking
+        all_results = []
+        result_scores = {}  # Track scores for ranking
+        
+        for term in search_terms:
+            if not term:
+                continue
+            
+            print(f"Debug: Searching for term: '{term}'")
+            
+            # Exact match first - highest priority
+            exact_match = df[
+                (df["पद"].astype(str).str.contains(re.escape(term), case=False, na=False, regex=True)) |
+                (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(re.escape(term), case=False, na=False, regex=True)) |
+                (df["कार्यालय क्रमांक"].astype(str).str.contains(re.escape(term), case=False, na=False, regex=True))
+            ]
+            
+            if not exact_match.empty:
+                # Score exact matches highly
+                for idx, row in exact_match.iterrows():
+                    score = 100  # High score for exact match
+                    if term.lower() in str(row["पद"]).lower():
+                        score += 50  # Extra points for position match
+                    result_scores[idx] = score
+                all_results.append(exact_match)
+                print(f"Debug: Exact match found for '{term}': {len(exact_match)} results")
+            else:
+                # Try fuzzy matching for better results
+                fuzzy_results = []
+                for idx, row in df.iterrows():
+                    score = 0
+                    # Check similarity with position
+                    if pd.notna(row["पद"]):
+                        pos_similarity = similarity(str(row["पद"]), term)
+                        if pos_similarity > 0.7:  # Higher threshold for fuzzy match
+                            score = int(pos_similarity * 80)  # Score based on similarity
+                            fuzzy_results.append(idx)
+                            result_scores[idx] = score
+                    # Check similarity with name
+                    elif pd.notna(row["कार्यालय प्रमुखाचे नाव"]):
+                        name_similarity = similarity(str(row["कार्यालय प्रमुखाचे नाव"]), term)
+                        if name_similarity > 0.7:
+                            score = int(name_similarity * 70)
+                            fuzzy_results.append(idx)
+                            result_scores[idx] = score
+                    # Check similarity with office number
+                    elif pd.notna(row["कार्यालय क्रमांक"]):
+                        office_similarity = similarity(str(row["कार्यालय क्रमांक"]), term)
+                        if office_similarity > 0.7:
+                            score = int(office_similarity * 60)
+                            fuzzy_results.append(idx)
+                            result_scores[idx] = score
+                
+                if fuzzy_results:
+                    fuzzy_match = df.iloc[fuzzy_results]
+                    all_results.append(fuzzy_match)
+                    print(f"Debug: Fuzzy match found for '{term}': {len(fuzzy_match)} results")
+        
+        # Combine all results, rank them, and limit to most relevant
+        if all_results:
+            combined_data = pd.concat(all_results, ignore_index=True).drop_duplicates()
+            
+            # Sort by score (highest first) and limit to top 5 results
+            if result_scores:
+                # Add scores to the dataframe
+                combined_data['score'] = combined_data.index.map(result_scores).fillna(0)
+                # Sort by score descending
+                combined_data = combined_data.sort_values('score', ascending=False)
+                # Take only top 5 results
+                filtered_data = combined_data.head(5)
+                # Remove the score column
+                filtered_data = filtered_data.drop('score', axis=1)
+                print(f"Debug: Ranked and limited to top {len(filtered_data)} results")
+            else:
+                filtered_data = combined_data.head(5)
+                print(f"Debug: Limited to top 5 results: {len(filtered_data)}")
+        else:
+            # If no results with analyzed query, try original voice text as fallback
+            print(f"Debug: No results with analyzed query, trying original voice text: '{voice_text}'")
+            
+            # Filter out generic terms from fallback search too
+            if voice_text.lower() not in ['अधिकारी', 'officer', 'कर्मचारी', 'employee']:
+                fallback_match = df[
+                    (df["पद"].astype(str).str.contains(re.escape(voice_text), case=False, na=False, regex=True)) |
+                    (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(re.escape(voice_text), case=False, na=False, regex=True)) |
+                    (df["कार्यालय क्रमांक"].astype(str).str.contains(re.escape(voice_text), case=False, na=False, regex=True))
+                ]
+                
+                if not fallback_match.empty:
+                    # Limit fallback results to top 3
+                    filtered_data = fallback_match.head(3)
+                    print(f"Debug: Fallback match found: {len(filtered_data)} results")
+                else:
+                    # Try fuzzy matching with original voice text (higher threshold)
+                    fuzzy_results = []
+                    for idx, row in df.iterrows():
+                        if pd.notna(row["पद"]) and similarity(str(row["पद"]), voice_text) > 0.8:
+                            fuzzy_results.append(idx)
+                        elif pd.notna(row["कार्यालय प्रमुखाचे नाव"]) and similarity(str(row["कार्यालय प्रमुखाचे नाव"]), voice_text) > 0.8:
+                            fuzzy_results.append(idx)
+                        elif pd.notna(row["कार्यालय क्रमांक"]) and similarity(str(row["कार्यालय क्रमांक"]), voice_text) > 0.8:
+                            fuzzy_results.append(idx)
+                    
+                    if fuzzy_results:
+                        filtered_data = df.iloc[fuzzy_results].head(3)
+                        print(f"Debug: Fuzzy fallback match found: {len(filtered_data)} results")
+                    else:
+                        filtered_data = pd.DataFrame()
+                        print(f"Debug: No results found even with fallback")
+            else:
+                filtered_data = pd.DataFrame()
+                print(f"Debug: Skipped fallback search for generic term: '{voice_text}'")
+        
+        # Exclude 'मोबाईल क्रमांक' from the output
+        filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
+        
+        room_image_paths = []
+        room_video_url = None
+        if not filtered_data.empty:
+            # Check if we have room information to display specific room images
+            for _, row in filtered_data.iterrows():
+                office_number = row.get("कार्यालय क्रमांक")
+                floor = row.get("मजला")
+                
+                print(f"Debug: Office number: {office_number}, Floor: {floor}")
+                
+                if office_number and floor:
+                    room_numbers = extract_room_number(office_number)
+                    print(f"Debug: Extracted room numbers: {room_numbers}")
+                    
+                    if room_numbers:
+                        current_room_images = get_room_image(room_numbers, floor)
+                        print(f"Debug: Room image paths for this record: {current_room_images}")
+                        if current_room_images:
+                            room_image_paths.extend(current_room_images)
+                            
+                            # Check if any room number has a video
+                            for room_num in room_numbers:
+                                video_url = get_room_video_url(room_num)
+                                if video_url:
+                                    room_video_url = video_url
+                                    print(f"Debug: Room {room_num} detected, video URL: {room_video_url}")
+                                    break
+                    else:
+                        # If no specific room numbers, still try to get floor plan
+                        current_floor_images = get_room_image([], floor)
+                        print(f"Debug: Floor plan paths for this record: {current_floor_images}")
+                        if current_floor_images:
+                            room_image_paths.extend(current_floor_images)
+            
+            # Remove duplicates and convert to None if empty
+            room_image_paths = list(set(room_image_paths)) if room_image_paths else None
+            print(f"Debug: Final combined room image paths: {room_image_paths}")
+            
+            result = "\n".join(
+                filtered_data.apply(
+                    lambda row: "\n".join([f"- {k}: {v}" for k, v in row.dropna().items()]), axis=1
+                )
+            )
+        else:
+            result = "माहिती उपलब्ध नाही"
+        
+        audio_base64 = get_audio_file(result)
+        return jsonify({
+            "result": result, 
+            "audio": audio_base64,
+            "room_image": room_image_paths,
+            "original_voice": voice_text,
+            "analyzed_query": analyzed_query,
+            "room_video_url": room_video_url
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # QR Code generation endpoint
 @app.route('/generate_qr', methods=['POST'])
 def generate_qr():
@@ -1544,6 +1910,7 @@ def generate_qr():
         
         # Get room images for the content
         room_image_paths = []
+        room_video_url = None
         for _, row in filtered_data.iterrows():
             office_number = row.get("कार्यालय क्रमांक")
             floor = row.get("मजला")
@@ -1554,6 +1921,13 @@ def generate_qr():
                     current_room_images = get_room_image(room_numbers, floor)
                     if current_room_images:
                         room_image_paths.extend(current_room_images)
+                        
+                        # Check if any room number has a video
+                        for room_num in room_numbers:
+                            video_url = get_room_video_url(room_num)
+                            if video_url:
+                                room_video_url = video_url
+                                break
                 else:
                     # If no specific room numbers, get floor plan
                     current_floor_images = get_room_image([], floor)
@@ -1570,21 +1944,29 @@ def generate_qr():
             )
         )
         
-        # Add room images to content if available
-        if room_image_paths:
-            content += "\n\n- मजला नकाशा: उपलब्ध आहे"
+        # Don't add room images and video info to content - handle them separately in mobile display
         
         # Generate a unique session ID
         session_id = str(uuid.uuid4())
         
         # Create mobile display URL using ngrok URL for mobile access
-        mobile_url = f"https://f9317ab52f51.ngrok-free.app/mobile_display/{session_id}"
+        mobile_url = f"https://87c1f757a3fa.ngrok-free.app/mobile_display/{session_id}"
         
         # Store the content in a simple way (in production, use a database)
         # For now, we'll pass it as a parameter with proper URL encoding
         import urllib.parse
         content_b64 = base64.b64encode(content.encode('utf-8')).decode('utf-8')
-        mobile_url_with_content = f"{mobile_url}?content={urllib.parse.quote(content_b64)}"
+        
+        # Add room image paths and video URL as separate parameters
+        params = f"content={urllib.parse.quote(content_b64)}"
+        if room_image_paths:
+            images_b64 = base64.b64encode(','.join(room_image_paths).encode('utf-8')).decode('utf-8')
+            params += f"&images={urllib.parse.quote(images_b64)}"
+        if room_video_url:
+            video_b64 = base64.b64encode(room_video_url.encode('utf-8')).decode('utf-8')
+            params += f"&video={urllib.parse.quote(video_b64)}"
+            
+        mobile_url_with_content = f"{mobile_url}?{params}"
         
         # Generate QR code with smaller size
         qr = qrcode.QRCode(
@@ -1620,72 +2002,71 @@ def mobile_display(session_id):
     try:
         # Get content from URL parameter and URL decode it
         content_b64_encoded = request.args.get('content', '')
+        images_b64_encoded = request.args.get('images', '')
+        video_b64_encoded = request.args.get('video', '')
         
         if not content_b64_encoded:
             return render_template('mobile_display.html', 
                                  content="<p style='color: #f44336; text-align: center;'>त्रुटी: माहिती उपलब्ध नाही</p>")
         
-        # URL decode the base64 string first
+        # URL decode the base64 strings first
         import urllib.parse
         content_b64 = urllib.parse.unquote(content_b64_encoded)
         
         # Decode content
         content = base64.b64decode(content_b64).decode('utf-8')
         
+        # Decode images if available
+        room_image_paths = []
+        if images_b64_encoded:
+            images_b64 = urllib.parse.unquote(images_b64_encoded)
+            images_str = base64.b64decode(images_b64).decode('utf-8')
+            room_image_paths = images_str.split(',') if images_str else []
+        
+        # Decode video URL if available
+        room_video_url = None
+        if video_b64_encoded:
+            video_b64 = urllib.parse.unquote(video_b64_encoded)
+            room_video_url = base64.b64decode(video_b64).decode('utf-8')
+        
         # Format content for better display
         formatted_content = format_mobile_content(content)
         
-        # Check if content mentions floor plans and add images using the same logic as main app
-        room_images_html = ""
-        if "मजला नकाशा: उपलब्ध आहे" in content:
-            # Parse the content to extract office information like the main app does
-            room_image_paths = []
+        # Generate room video HTML if video URL is available
+        room_video_html = ""
+        if room_video_url:
+            # Convert Google Drive share link to embeddable format
+            embed_url = room_video_url.replace('/file/d/', '/file/d/').replace('/view?usp=drive_link', '/preview')
             
-            # Split content by office entries (each starts with "- पद:")
-            office_entries = re.split(r'\n- पद:', content)
-            
-            for entry in office_entries:
-                if not entry.strip():
-                    continue
-                    
-                # Add back the "- पद:" prefix if it was removed
-                if not entry.startswith('- पद:'):
-                    entry = '- पद:' + entry
-                
-                # Extract office number and floor from this entry
-                office_match = re.search(r'- कार्यालय क्रमांक:\s*([^\n]+)', entry)
-                floor_match = re.search(r'- मजला:\s*([^\n]+)', entry)
-                
-                if office_match and floor_match:
-                    office_number = office_match.group(1).strip()
-                    floor = floor_match.group(1).strip()
-                    
-                    # Use the same logic as main app
-                    room_numbers = extract_room_number(office_number)
-                    if room_numbers:
-                        current_room_images = get_room_image(room_numbers, floor)
-                        if current_room_images:
-                            room_image_paths.extend(current_room_images)
-                    else:
-                        # If no specific room numbers, still try to get floor plan
-                        current_floor_images = get_room_image([], floor)
-                        if current_floor_images:
-                            room_image_paths.extend(current_floor_images)
-            
-            # Remove duplicates
-            room_image_paths = list(set(room_image_paths)) if room_image_paths else []
-            
-            # Generate HTML for all images
-            if room_image_paths:
-                room_images_html = "<div class='floor-plans'><h4>🏢 मजला नकाशा:</h4>"
-                for img_path in room_image_paths:
-                    # Ensure the path starts with /static/
-                    if not img_path.startswith('/static/'):
-                        img_path = '/static/' + img_path
-                    room_images_html += f"<img src='{img_path}' alt='Floor Plan' class='floor-plan-img'>"
-                room_images_html += "</div>"
+            room_video_html = f"""
+                <div class='room-video' style='margin-top: 20px; text-align: center; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 16px; border: 2px solid #e9ecef; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);'>
+                    <h4 style='color: #667eea; margin-bottom: 16px; font-size: 18px;'>🎥 रूम व्हिडिओ</h4>
+                    <p style='margin-bottom: 16px; color: #6c757d; font-size: 14px;'>रूम नकाशासाठी व्हिडिओ पहा</p>
+                    <div style='position: relative; width: 100%; max-width: 100%; margin: 0 auto;'>
+                        <iframe 
+                            src='{embed_url}' 
+                            width='100%' 
+                            height='300' 
+                            frameborder='0' 
+                            allowfullscreen
+                            style='border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);'
+                            allow='autoplay; encrypted-media'>
+                        </iframe>
+                    </div>
+                </div>
+            """
         
-        return render_template('mobile_display.html', content=formatted_content, room_images=room_images_html)
+        # Generate room images HTML if image paths are available
+        if room_image_paths:
+            room_images_html = "<div style='margin-top: 20px; text-align: center;'>"
+            room_images_html += "<h4 style='color: #667eea; margin-bottom: 16px; font-size: 18px;'>🏢 मजला नकाशा</h4>"
+            for img_path in room_image_paths:
+                if not img_path.startswith('/static/'):
+                    img_path = '/static/' + img_path
+                room_images_html += f"<img src='{img_path}' alt='Floor Plan' class='floor-plan-img'>"
+            room_images_html += "</div>"
+        
+        return render_template('mobile_display.html', content=formatted_content, room_images=room_images_html, room_video=room_video_html)
         
     except Exception as e:
         return render_template('mobile_display.html', 
