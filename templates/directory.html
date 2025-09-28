@@ -107,6 +107,74 @@
             position: relative;
         }
 
+        .admin-login {
+            position: absolute;
+            top: 100px;
+            right: 0;
+        }
+
+        .admin-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .admin-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .admin-btn:hover::before {
+            left: 100%;
+        }
+
+        .admin-btn:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+        }
+
+        .admin-btn:active {
+            transform: translateY(-1px) scale(1.02);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .admin-btn::after {
+            content: 'Admin';
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            font-weight: 500;
+            color: #667eea;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .admin-btn:hover::after {
+            opacity: 1;
+        }
+
         .header::after {
             content: '';
             position: absolute;
@@ -720,6 +788,11 @@
                 <h2>कोकण भवन कार्यालय निर्देशिका</h2>
                 <img src="{{ url_for('static', filename='symbol.jpg') }}" alt="चिन्ह">
             </div>
+            <div class="admin-login">
+                <button class="admin-btn" onclick="openAdminLogin()" title="प्रशासक प्रवेश">
+                    <span>👤</span>
+                </button>
+            </div>
         </div>
 
         <div class="tabs">
@@ -800,6 +873,36 @@
             <span class="image-modal-close" onclick="closeImageModal()">&times;</span>
             <div id="modalTitle" class="image-modal-title"></div>
             <img id="modalImage" src="" alt="Floor Plan">
+        </div>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div id="adminModal" class="image-modal">
+        <div class="image-modal-content">
+            <span class="image-modal-close" onclick="closeAdminModal()">&times;</span>
+            <div class="admin-login-form">
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white;">
+                        👤
+                    </div>
+                    <h3 style="color: #667eea; margin-bottom: 8px; font-size: 24px; font-weight: 600;">प्रशासक प्रवेश</h3>
+                    <p style="color: #718096; font-size: 14px; margin: 0;">कृपया आपले प्रशासक क्रेडेन्शियल्स प्रविष्ट करा</p>
+                </div>
+                <form id="adminLoginForm">
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; color: #4a5568; font-weight: 500; font-size: 14px;">वापरकर्ता नाव:</label>
+                        <input type="text" id="adminUsername" required placeholder="वापरकर्ता नाव प्रविष्ट करा" style="width: 100%; padding: 14px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; transition: all 0.3s ease; background: #f8f9fa;" onfocus="this.style.borderColor='#667eea'; this.style.background='white';" onblur="this.style.borderColor='#e2e8f0'; this.style.background='#f8f9fa';">
+                    </div>
+                    <div style="margin-bottom: 25px;">
+                        <label style="display: block; margin-bottom: 8px; color: #4a5568; font-weight: 500; font-size: 14px;">पासवर्ड:</label>
+                        <input type="password" id="adminPassword" required placeholder="पासवर्ड प्रविष्ट करा" style="width: 100%; padding: 14px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; transition: all 0.3s ease; background: #f8f9fa;" onfocus="this.style.borderColor='#667eea'; this.style.background='white';" onblur="this.style.borderColor='#e2e8f0'; this.style.background='#f8f9fa';">
+                    </div>
+                    <button type="submit" style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.35)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.25)';">
+                        🔐 प्रवेश करा
+                    </button>
+                </form>
+                <div id="adminError" style="margin-top: 20px; padding: 12px 16px; background: #fed7d7; color: #c53030; border-radius: 10px; display: none; border-left: 4px solid #f56565; font-size: 14px;"></div>
+            </div>
         </div>
     </div>
 
@@ -1330,6 +1433,61 @@
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeImageModal();
+                closeAdminModal();
+            }
+        });
+
+        // Admin Login Functions
+        function openAdminLogin() {
+            const modal = document.getElementById('adminModal');
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAdminModal() {
+            const modal = document.getElementById('adminModal');
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            // Clear form
+            document.getElementById('adminLoginForm').reset();
+            document.getElementById('adminError').style.display = 'none';
+        }
+
+        // Admin login form submission
+        document.getElementById('adminLoginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            const errorDiv = document.getElementById('adminError');
+            
+            try {
+                const response = await fetch('/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, password: password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    closeAdminModal();
+                    // Redirect to admin page
+                    window.location.href = '/admin';
+                } else {
+                    errorDiv.textContent = data.error || 'अवैध वापरकर्ता नाव किंवा पासवर्ड';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'त्रुटी: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        });
+
+        // Close admin modal when clicking outside
+        document.getElementById('adminModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAdminModal();
             }
         });
 

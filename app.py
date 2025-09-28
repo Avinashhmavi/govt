@@ -1,5 +1,5 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
-from werkzeug.security import check_password_hash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
+from werkzeug.security import check_password_hash, generate_password_hash
 import pandas as pd
 from gtts import gTTS
 import io
@@ -13,13 +13,24 @@ import qrcode
 from PIL import Image
 import uuid
 from datetime import datetime, timedelta
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import json
 
 # Load environment variables
 load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
+# Database configuration
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', static_url_path='/static')
+app.secret_key = 'your-secret-key-here'  # Change this to a secure secret key
 CORS(app)  # Enable CORS for API access
 
 # Initialize OpenAI client
@@ -1480,25 +1491,7 @@ def login():
         return render_template('index.html', error="अवैध पासवर्ड. कृपया पुन्हा प्रयत्न करा.")
     return render_template('index.html')
 
-# Directory page
-@app.route('/directory')
-def directory():
-    # Filter out "---" entries and sort them to the end
-    departments_list = df["पद"].dropna().unique()
-    people_list = df["कार्यालय प्रमुखाचे नाव"].dropna().unique()
-    
-    # Separate "---" entries from regular entries
-    regular_departments = [dept for dept in departments_list if dept != "---"]
-    dash_departments = [dept for dept in departments_list if dept == "---"]
-    
-    regular_people = [person for person in people_list if person != "---"]
-    dash_people = [person for person in people_list if person == "---"]
-    
-    # Sort regular entries and append "---" entries at the end
-    sorted_departments = sorted(regular_departments) + dash_departments
-    sorted_people = sorted(regular_people) + dash_people
-    
-    return render_template('directory.html', departments=sorted_departments, people=sorted_people)
+# Directory page - moved to database implementation below
 
 # API endpoint for search
 @app.route('/api/search', methods=['POST'])
@@ -1510,63 +1503,99 @@ def search():
         
         print(f"Debug: Received query: '{query}'")  # Debug line
         
-        # Filter data based on exact match of 'पद', 'कार्यालय प्रमुखाचे नाव', or 'कार्यालय क्रमांक'
-        # Escape special regex characters in the query
-        import re
-        escaped_query = re.escape(query)
-        filtered_data = df[
-            (df["पद"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True)) |
-            (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True)) |
-            (df["कार्यालय क्रमांक"].astype(str).str.contains(escaped_query, case=False, na=False, regex=True))
-        ]
-        # Exclude 'मोबाईल क्रमांक' from the output
-        filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Database connection error"}), 500
         
-        room_image_paths = []
-        room_video_url = None
-        if not filtered_data.empty:
-            # Check if we have room information to display specific room images
-            for _, row in filtered_data.iterrows():
-                office_number = row.get("कार्यालय क्रमांक")
-                floor = row.get("मजला")
-                
-                print(f"Debug: Office number: {office_number}, Floor: {floor}")  # Debug line
-                
-                if office_number and floor:
-                    room_numbers = extract_room_number(office_number)
-                    print(f"Debug: Extracted room numbers: {room_numbers}")  # Debug line
-                    
-                    if room_numbers:
-                        current_room_images = get_room_image(room_numbers, floor)
-                        print(f"Debug: Room image paths for this record: {current_room_images}")  # Debug line
-                        if current_room_images:
-                            room_image_paths.extend(current_room_images)
-                            
-                            # Check if any room number has a video
-                            for room_num in room_numbers:
-                                video_url = get_room_video_url(room_num)
-                                if video_url:
-                                    room_video_url = video_url
-                                    print(f"Debug: Room {room_num} detected, video URL: {room_video_url}")
-                                    break
-                    else:
-                        # If no specific room numbers, still try to get floor plan
-                        current_floor_images = get_room_image([], floor)
-                        print(f"Debug: Floor plan paths for this record: {current_floor_images}")  # Debug line
-                        if current_floor_images:
-                            room_image_paths.extend(current_floor_images)
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
             
-            # Remove duplicates and convert to None if empty
-            room_image_paths = list(set(room_image_paths)) if room_image_paths else None
-            print(f"Debug: Final combined room image paths: {room_image_paths}")  # Debug line
-            
-            result = "\n".join(
-                filtered_data.apply(
-                    lambda row: "\n".join([f"- {k}: {v}" for k, v in row.dropna().items()]), axis=1
+            # Search in database for ALL persons (both available and unavailable)
+            cursor.execute("""
+                SELECT * FROM persons 
+                WHERE (
+                    LOWER(name) LIKE LOWER(%s) OR 
+                    LOWER(position) LIKE LOWER(%s) OR 
+                    LOWER(office_number) LIKE LOWER(%s)
                 )
-            )
-        else:
-            result = "माहिती उपलब्ध नाही"
+            """, (f'%{query}%', f'%{query}%', f'%{query}%'))
+            
+            results = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            
+            room_image_paths = []
+            room_video_url = None
+            
+            if results:
+                result_lines = []
+                for row in results:
+                    # Build result string for each person
+                    person_info = []
+                    if row['name']:
+                        person_info.append(f"- नाव: {row['name']}")
+                    if row['position']:
+                        person_info.append(f"- पद: {row['position']}")
+                    if row['office_name']:
+                        person_info.append(f"- कार्यालयाचे नाव: {row['office_name']}")
+                    if row['office_number']:
+                        person_info.append(f"- कार्यालय क्रमांक: {row['office_number']}")
+                    # Mobile number field removed as requested
+                    if row['floor']:
+                        person_info.append(f"- मजला: {row['floor']}")
+                    if row['remarks']:
+                        person_info.append(f"- शेरा: {row['remarks']}")
+                    
+                    # Add availability status
+                    availability_status = "उपलब्ध" if row['is_available'] else "अनुपलब्ध"
+                    status_emoji = "✅" if row['is_available'] else "❌"
+                    person_info.append(f"- स्थिती: {status_emoji} {availability_status}")
+                    
+                    result_lines.append('\n'.join(person_info))
+                    
+                    # Get room images and video
+                    office_number = row['office_number']
+                    floor = row['floor']
+                    
+                    print(f"Debug: Office number: {office_number}, Floor: {floor}")  # Debug line
+                    
+                    if office_number and floor:
+                        room_numbers = extract_room_number(office_number)
+                        print(f"Debug: Extracted room numbers: {room_numbers}")  # Debug line
+                        
+                        if room_numbers:
+                            current_room_images = get_room_image(room_numbers, floor)
+                            print(f"Debug: Room image paths for this record: {current_room_images}")  # Debug line
+                            if current_room_images:
+                                room_image_paths.extend(current_room_images)
+                                
+                                # Check if any room number has a video
+                                for room_num in room_numbers:
+                                    video_url = get_room_video_url(room_num)
+                                    if video_url:
+                                        room_video_url = video_url
+                                        print(f"Debug: Room {room_num} detected, video URL: {room_video_url}")
+                                        break
+                        else:
+                            # If no specific room numbers, still try to get floor plan
+                            current_floor_images = get_room_image([], floor)
+                            print(f"Debug: Floor plan paths for this record: {current_floor_images}")  # Debug line
+                            if current_floor_images:
+                                room_image_paths.extend(current_floor_images)
+                
+                result = '\n\n'.join(result_lines)
+                
+                # Remove duplicates and convert to None if empty
+                room_image_paths = list(set(room_image_paths)) if room_image_paths else None
+                print(f"Debug: Final combined room image paths: {room_image_paths}")  # Debug line
+            else:
+                result = "माहिती उपलब्ध नाही"
+        
+        except Exception as e:
+            conn.rollback()
+            cursor.close()
+            conn.close()
+            return jsonify({"error": f"Database error: {str(e)}"}), 500
         
         audio_base64 = get_audio_file(result)
         return jsonify({
@@ -2117,6 +2146,234 @@ def format_mobile_content(content):
     
     return '<br>'.join(formatted_lines)
 
+# Database connection function
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD
+        )
+        return conn
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        return None
+
+# Initialize database tables
+def init_database():
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Create persons table if it doesn't exist
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS persons (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                position VARCHAR(255),
+                office_name VARCHAR(255),
+                office_number VARCHAR(50),
+                mobile_number VARCHAR(20),
+                floor VARCHAR(100),
+                remarks TEXT,
+                is_available BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Create admin_users table if it doesn't exist
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admin_users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Insert default admin user if it doesn't exist
+        cursor.execute("SELECT COUNT(*) FROM admin_users WHERE username = 'admin'")
+        admin_exists = cursor.fetchone()[0]
+        
+        if admin_exists == 0:
+            password_hash = generate_password_hash('5555')
+            cursor.execute(
+                "INSERT INTO admin_users (username, password_hash) VALUES (%s, %s)",
+                ('admin', password_hash)
+            )
+        
+        # Load data from JSON file into database if table is empty
+        cursor.execute("SELECT COUNT(*) FROM persons")
+        person_count = cursor.fetchone()[0]
+        
+        if person_count == 0:
+            # Load data from JSON file
+            with open('data.json', 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            for person in data:
+                cursor.execute("""
+                    INSERT INTO persons (name, position, office_name, office_number, mobile_number, floor, remarks, is_available)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    person.get('नाव', ''),
+                    person.get('पद', ''),
+                    person.get('कार्यालयाचे नाव', ''),
+                    person.get('कार्यालय क्रमांक', ''),
+                    person.get('मोबाईल क्रमांक', ''),
+                    person.get('मजला', ''),
+                    person.get('शेरा', ''),
+                    True  # Default to available
+                ))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True
+        
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        return False
+
+# Admin authentication decorator
+def admin_required(f):
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
+
+# Admin routes
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        
+        if username == 'admin' and password == '5555':
+            session['admin_logged_in'] = True
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'अवैध वापरकर्ता नाव किंवा पासवर्ड'})
+    
+    return render_template('admin_login.html')
+
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    conn = get_db_connection()
+    if not conn:
+        return "Database connection error", 500
+    
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM persons ORDER BY name")
+        persons = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        return render_template('admin_dashboard.html', persons=persons)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+@app.route('/admin/toggle_person/<int:person_id>', methods=['POST'])
+@admin_required
+def toggle_person(person_id):
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Database connection error'})
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT is_available FROM persons WHERE id = %s", (person_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            new_status = not result[0]
+            cursor.execute(
+                "UPDATE persons SET is_available = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                (new_status, person_id)
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return jsonify({'success': True, 'is_available': new_status})
+        else:
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Person not found'})
+    except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_logged_in', None)
+    return redirect(url_for('directory'))
+
+# Update the directory route to use database
+@app.route('/directory')
+def directory():
+    conn = get_db_connection()
+    if not conn:
+        # Fallback to JSON file if database is not available
+        with open('data.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        departments = list(set([person.get('पद', '') for person in data if person.get('पद')]))
+        if "---" not in departments:
+            departments.append("---")  # Add "---" at the end only if not already present
+        people = list(set([person.get('नाव', '') for person in data if person.get('नाव')]))
+        if "---" not in people:
+            people.append("---")  # Add "---" at the end only if not already present
+    else:
+        try:
+            cursor = conn.cursor()
+            # Show ALL positions (both available and unavailable)
+            cursor.execute("SELECT DISTINCT position FROM persons WHERE position != '' ORDER BY position")
+            departments = [row[0] for row in cursor.fetchall()]
+            if "---" not in departments:
+                departments.append("---")  # Add "---" at the end only if not already present
+            
+            # Show ALL names (both available and unavailable)
+            cursor.execute("SELECT DISTINCT name FROM persons WHERE name != '' ORDER BY name")
+            people = [row[0] for row in cursor.fetchall()]
+            if "---" not in people:
+                people.append("---")  # Add "---" at the end only if not already present
+            
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"Database error: {e}")
+            # Fallback to JSON file
+            with open('data.json', 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            departments = list(set([person.get('पद', '') for person in data if person.get('पद')]))
+            if "---" not in departments:
+                departments.append("---")  # Add "---" at the end only if not already present
+            people = list(set([person.get('नाव', '') for person in data if person.get('नाव')]))
+            if "---" not in people:
+                people.append("---")  # Add "---" at the end only if not already present
+    
+    return render_template('directory.html', departments=departments, people=people)
+
 if __name__ == '__main__':
+    # Initialize database on startup
+    init_database()
+    
     port = int(os.getenv("PORT", 5009))
     app.run(host='0.0.0.0', port=port, debug=False)

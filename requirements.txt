@@ -8,3 +8,4 @@ gunicorn
 flask-cors
 qrcode
 Pillow
+psycopg2-binary

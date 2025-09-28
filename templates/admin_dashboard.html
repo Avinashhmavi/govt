@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>प्रशासक डॅशबोर्ड</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Noto+Sans+Devanagari:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans Devanagari', 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            padding: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #e9ecef;
+            position: relative;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 3px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+
+        .header h1 {
+            color: #1a1a1a;
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #6c757d;
+            font-size: 16px;
+        }
+
+        .admin-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border-radius: 16px;
+            border: 2px solid #e9ecef;
+        }
+
+        .search-box {
+            flex: 1;
+            margin-right: 20px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            font-family: inherit;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .logout-btn {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(220, 53, 69, 0.3);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            padding: 24px;
+            border-radius: 16px;
+            border: 2px solid #e9ecef;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-card h3 {
+            color: #667eea;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .stat-card p {
+            color: #6c757d;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .persons-table {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 2px solid #e9ecef;
+        }
+
+        .table-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .table-content {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .person-row {
+            display: grid;
+            grid-template-columns: 2fr 2fr 1fr 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .person-row:hover {
+            background: #f8f9fa;
+        }
+
+        .person-row:last-child {
+            border-bottom: none;
+        }
+
+        .person-info {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .person-name {
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+        }
+
+        .person-position {
+            color: #6c757d;
+        }
+
+        .person-office {
+            font-size: 14px;
+            color: #495057;
+        }
+
+        .person-floor {
+            font-size: 14px;
+            color: #495057;
+            text-align: center;
+        }
+
+        .toggle-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #28a745;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-available {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-unavailable {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-size: 18px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            .admin-controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .search-box {
+                margin-right: 0;
+                width: 100%;
+            }
+
+            .person-row {
+                grid-template-columns: 1fr;
+                gap: 10px;
+                text-align: center;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>प्रशासक डॅशबोर्ड</h1>
+            <p>कोकण भवन कार्यालय निर्देशिका - व्यक्तींचे व्यवस्थापन</p>
+        </div>
+
+        <div class="admin-controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="व्यक्ती शोधा..." onkeyup="filterPersons()">
+            </div>
+            <button class="logout-btn" onclick="logout()">
+                बाहेर पडा
+            </button>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3 id="totalPersons">0</h3>
+                <p>एकूण व्यक्ती</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="availablePersons">0</h3>
+                <p>उपलब्ध व्यक्ती</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="unavailablePersons">0</h3>
+                <p>अनुपलब्ध व्यक्ती</p>
+            </div>
+        </div>
+
+        <div class="persons-table">
+            <div class="table-header">
+                व्यक्तींची यादी
+            </div>
+            <div class="table-content" id="personsTable">
+                <div class="no-results">
+                    <div class="loading"></div>
+                    <p>डेटा लोड होत आहे...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allPersons = [];
+        let filteredPersons = [];
+
+        // Load persons data
+        function loadPersons() {
+            const personsData = {{ persons | tojson | safe }};
+            allPersons = personsData;
+            filteredPersons = [...allPersons];
+            
+            updateStats();
+            renderPersons();
+        }
+
+        // Update statistics
+        function updateStats() {
+            const total = allPersons.length;
+            const available = allPersons.filter(p => p.is_available).length;
+            const unavailable = total - available;
+
+            document.getElementById('totalPersons').textContent = total;
+            document.getElementById('availablePersons').textContent = available;
+            document.getElementById('unavailablePersons').textContent = unavailable;
+        }
+
+        // Render persons table
+        function renderPersons() {
+            const tableContent = document.getElementById('personsTable');
+            
+            if (filteredPersons.length === 0) {
+                tableContent.innerHTML = '<div class="no-results">कोणतेही व्यक्ती सापडले नाहीत</div>';
+                return;
+            }
+
+            const html = filteredPersons.map(person => `
+                <div class="person-row">
+                    <div class="person-info">
+                        <div class="person-name">${person.name || 'N/A'}</div>
+                        <div class="person-position">${person.position || 'N/A'}</div>
+                    </div>
+                    <div class="person-office">
+                        ${person.office_name || 'N/A'}<br>
+                        <small>${person.office_number || 'N/A'}</small>
+                    </div>
+                    <div class="person-floor">
+                        ${person.floor || 'N/A'}
+                    </div>
+                    <div class="toggle-container">
+                        <span class="status-indicator ${person.is_available ? 'status-available' : 'status-unavailable'}">
+                            ${person.is_available ? 'उपलब्ध' : 'अनुपलब्ध'}
+                        </span>
+                    </div>
+                    <div class="toggle-container">
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${person.is_available ? 'checked' : ''} 
+                                   onchange="togglePerson(${person.id}, this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            `).join('');
+
+            tableContent.innerHTML = html;
+        }
+
+        // Filter persons based on search
+        function filterPersons() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (searchTerm === '') {
+                filteredPersons = [...allPersons];
+            } else {
+                filteredPersons = allPersons.filter(person => 
+                    (person.name && person.name.toLowerCase().includes(searchTerm)) ||
+                    (person.position && person.position.toLowerCase().includes(searchTerm)) ||
+                    (person.office_name && person.office_name.toLowerCase().includes(searchTerm)) ||
+                    (person.office_number && person.office_number.toLowerCase().includes(searchTerm))
+                );
+            }
+            
+            renderPersons();
+        }
+
+        // Toggle person availability
+        async function togglePerson(personId, isAvailable) {
+            try {
+                const response = await fetch(`/admin/toggle_person/${personId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update the person in our local data
+                    const person = allPersons.find(p => p.id === personId);
+                    if (person) {
+                        person.is_available = data.is_available;
+                    }
+                    
+                    updateStats();
+                    renderPersons();
+                } else {
+                    alert('त्रुटी: ' + (data.error || 'अज्ञात त्रुटी'));
+                    // Revert the toggle
+                    const checkbox = document.querySelector(`input[onchange*="${personId}"]`);
+                    if (checkbox) {
+                        checkbox.checked = !isAvailable;
+                    }
+                }
+            } catch (error) {
+                console.error('Error toggling person:', error);
+                alert('त्रुटी: ' + error.message);
+                // Revert the toggle
+                const checkbox = document.querySelector(`input[onchange*="${personId}"]`);
+                if (checkbox) {
+                    checkbox.checked = !isAvailable;
+                }
+            }
+        }
+
+        // Logout function
+        function logout() {
+            if (confirm('तुम्हाला खरोखर बाहेर पडायचे आहे?')) {
+                window.location.href = '/admin/logout';
+            }
+        }
+
+        // Load data when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPersons();
+        });
+    </script>
+</body>
+</html>
