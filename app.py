@@ -1979,7 +1979,7 @@ def generate_qr():
         session_id = str(uuid.uuid4())
         
         # Create mobile display URL using deployed app URL for mobile access
-        mobile_url = f"https://gom-xznn.onrender.com/mobile_display/{session_id}"
+        mobile_url = f"https://govt-kald.onrender.com/mobile_display/{session_id}"
         
         # Store the content in a simple way (in production, use a database)
         # For now, we'll pass it as a parameter with proper URL encoding
