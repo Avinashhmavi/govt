@@ -18,6 +18,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir numpy==1.24.4 && \
     pip install --no-cache-dir pandas==2.1.4 && \
+    pip install --no-cache-dir httpx==0.25.2 && \
+    pip install --no-cache-dir openai==1.12.0 && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code

@@ -33,8 +33,14 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.secret_key = 'your-secret-key-here'  # Change this to a secure secret key
 CORS(app)  # Enable CORS for API access
 
-# Initialize OpenAI client
-client = OpenAI(api_key=openai_api_key)
+# Initialize OpenAI client (only if API key is available)
+client = None
+if openai_api_key:
+    try:
+        client = OpenAI(api_key=openai_api_key)
+    except Exception as e:
+        print(f"Warning: Could not initialize OpenAI client: {e}")
+        client = None
 
 # Floor mapping from Marathi to English
 floor_mapping = {
@@ -1645,6 +1651,9 @@ def voice_analysis():
         
         # Use OpenAI to analyze and improve the voice input
         try:
+            if not client:
+                return jsonify({"error": "OpenAI client not available. Please check API key configuration."}), 500
+            
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
