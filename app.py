@@ -369,10 +369,44 @@ def extract_room_number(office_number):
     
     return None
 
+def infer_floor_from_room(room_number: str):
+    """Infer floor in Marathi from a room number when floor is missing.
+    Returns one of: 'पहिला मजला', 'दुसरा मजला', 'तिसरा मजला', 'चौथा मजला', 'तळ मजला' or None.
+    """
+    if not room_number:
+        return None
+    rn = str(room_number).strip()
+    # Ground floor formats handled elsewhere (e.g., 'जी-19', 'G-19')
+    if rn.lower().startswith('g') or rn.startswith('जी'):
+        return 'तळ मजला'
+    if not rn[0].isdigit():
+        return None
+    first_digit = rn[0]
+    if first_digit == '1':
+        return 'पहिला मजला'
+    if first_digit == '2':
+        return 'दुसरा मजला'
+    if first_digit == '3':
+        return 'तिसरा मजला'
+    if first_digit == '4':
+        return 'चौथा मजला'
+    return None
+
 def get_room_image(room_numbers, floor):
     """Get the specific room image paths based on room numbers and floor"""
+    # If no specific rooms provided, still return floor plan for 5th/6th/7th floors
     if not room_numbers:
-        return None
+        if floor == "पाचवा मजला" or floor == "पाचवा":
+            print("Debug: Added fifth floor plan only, current paths: ['floor_plans/fifth_floor.jpg']")
+            return ["floor_plans/fifth_floor.jpg"]
+        elif floor == "सहावा मजला" or floor == "सहावा":
+            print("Debug: Added sixth floor plan only, current paths: ['floor_plans/sixth_floor.jpg']")
+            return ["floor_plans/sixth_floor.jpg"]
+        elif floor == "सातवा मजला" or floor == "सातवा":
+            print("Debug: Added seventh floor plan only, current paths: ['floor_plans/seventh_floor.jpg']")
+            return ["floor_plans/seventh_floor.jpg"]
+        else:
+            return None
     
     # Convert single room number to list for consistency
     if not isinstance(room_numbers, list):
@@ -380,17 +414,15 @@ def get_room_image(room_numbers, floor):
     
     image_paths = []
     
-    # For floors 5, 6, 7: Show only main floor plan image (no individual room images)
+    # For floors 5, 6, 7 with specific rooms: show only main floor plan image
     if floor == "पाचवा मजला" or floor == "पाचवा":
         image_paths.append("floor_plans/fifth_floor.jpg")
         print(f"Debug: Added fifth floor plan only, current paths: {image_paths}")
         return image_paths
-    
     elif floor == "सहावा मजला" or floor == "सहावा":
         image_paths.append("floor_plans/sixth_floor.jpg")
         print(f"Debug: Added sixth floor plan only, current paths: {image_paths}")
         return image_paths
-    
     elif floor == "सातवा मजला" or floor == "सातवा":
         image_paths.append("floor_plans/seventh_floor.jpg")
         print(f"Debug: Added seventh floor plan only, current paths: {image_paths}")
@@ -438,6 +470,21 @@ def get_room_image(room_numbers, floor):
                 if key == room_num:
                     image_paths.append(f"floor_plans/fourth_floor/{value}")
                     break
+    
+    # If no specific room image found for floors 1-4, fallback to main floor plan image if available
+    if not image_paths:
+        if floor == "पहिला मजला" or floor == "पहिला":
+            print("Debug: No specific room image found; falling back to first_floor.jpg")
+            return ["floor_plans/first_floor.jpg"]
+        elif floor == "दुसरा मजला" or floor == "दुसरा":
+            print("Debug: No specific room image found; falling back to second_floor.jpg")
+            return ["floor_plans/second_floor.jpg"]
+        elif floor == "तिसरा मजला" or floor == "तिसरा":
+            print("Debug: No specific room image found; falling back to third_floor.jpg")
+            return ["floor_plans/third_floor.jpg"]
+        elif floor == "चौथा मजला" or floor == "चौथा":
+            print("Debug: No specific room image found; falling back to fourth_floor.jpg")
+            return ["floor_plans/fourth_floor.jpg"]
     
     # Return list of image paths, or None if no images found
     print(f"Debug: Final image paths: {image_paths}")
@@ -1565,11 +1612,17 @@ def search():
                     
                     print(f"Debug: Office number: {office_number}, Floor: {floor}")  # Debug line
                     
-                    if office_number and floor:
+                    if office_number and (floor or True):
                         room_numbers = extract_room_number(office_number)
                         print(f"Debug: Extracted room numbers: {room_numbers}")  # Debug line
                         
                         if room_numbers:
+                            # If floor is missing, infer from room number
+                            if not floor:
+                                inferred = infer_floor_from_room(room_numbers[0])
+                                if inferred:
+                                    floor = inferred
+                                    print(f"Debug: Inferred floor from room {room_numbers[0]} -> {floor}")
                             current_room_images = get_room_image(room_numbers, floor)
                             print(f"Debug: Room image paths for this record: {current_room_images}")  # Debug line
                             if current_room_images:
@@ -1704,25 +1757,60 @@ def voice_analysis():
             
             analyzed_query = response.choices[0].message.content.strip()
             print(f"Debug: OpenAI analyzed query: '{analyzed_query}'")
+
+            # Normalize the analyzed query and guard against apology/meta responses
+            import re
+            apology_or_meta_patterns = [
+                r"i\'m sorry",
+                r"i’m sorry",
+                r"sorry",
+                r"please provide",
+                r"too generic",
+                r"सबंधित माहिती",
+                r"कृपया",
+                r"क्षमस्व",
+                r"मी क्षमस्व",
+                r"The most relevant search term extracted",
+            ]
+            analyzed_query_clean = analyzed_query.strip()
+            if any(re.search(p, analyzed_query_clean.lower()) for p in apology_or_meta_patterns):
+                # Fall back to original voice text if AI produced guidance/apology text
+                analyzed_query_clean = voice_text
+
+            # If the AI wrapped the key term(s) in quotes, prefer the quoted segments
+            quoted_terms = re.findall(r"[\"'‘’“”]([^\"'‘’“”]+)[\"'‘’“”]", analyzed_query_clean)
+            if quoted_terms:
+                analyzed_query_clean = ", ".join(t.strip() for t in quoted_terms)
             
         except Exception as openai_error:
             print(f"OpenAI error: {openai_error}")
             # Fallback to original voice text if OpenAI fails
             analyzed_query = voice_text
+            analyzed_query_clean = voice_text
         
         # Now search using the analyzed query with improved logic
-        import re
         from difflib import SequenceMatcher
         
         def similarity(a, b):
             return SequenceMatcher(None, a.lower(), b.lower()).ratio()
         
         # Split analyzed query by commas to get multiple search terms
-        search_terms = [term.strip() for term in analyzed_query.split(',')]
+        search_terms = [term.strip() for term in (analyzed_query_clean if 'analyzed_query_clean' in locals() else analyzed_query).split(',')]
         
         # Enhance search terms with translations
         enhanced_search_terms = []
         for term in search_terms:
+            # Basic normalization: strip quotes/punctuation and allow only Devanagari/Latin letters, digits, dot, dash, space
+            def normalize_term(t: str) -> str:
+                t = t.strip()
+                t = t.strip("\"'“”‘’")
+                t = re.sub(r"[^०-९0-9A-Za-z\u0900-\u097F\-\.\s]", "", t)
+                t = re.sub(r"\s+", " ", t).strip()
+                return t
+
+            term = normalize_term(term)
+            if not term:
+                continue
             enhanced_search_terms.append(term)
             # Add English translation if term is in Marathi
             if term in marathi_to_english:
@@ -1737,11 +1825,24 @@ def voice_analysis():
         
         # Filter out overly generic terms that cause too many irrelevant results
         generic_terms = ['अधिकारी', 'officer', 'कर्मचारी', 'employee', 'सेवक', 'servant']
+        # Also filter out meta/apology phrases and overly long/wordy terms
+        meta_blocklist = [
+            'i am sorry', "i'm sorry", 'sorry', 'please provide', 'too generic',
+            'the most relevant search term extracted'
+        ]
         filtered_search_terms = []
         for term in search_terms:
             # Only include generic terms if they're part of a longer, specific term
             if term in generic_terms and len(term.split()) == 1:
                 print(f"Debug: Filtered out generic term: '{term}'")
+                continue
+            # Skip if contains meta/apology phrases
+            if any(m in term.lower() for m in meta_blocklist):
+                print(f"Debug: Filtered out meta/apology term: '{term}'")
+                continue
+            # Skip overly long or overly wordy terms
+            if len(term) > 40 or len(term.split()) > 5:
+                print(f"Debug: Filtered out long term: '{term}'")
                 continue
             filtered_search_terms.append(term)
         
@@ -1874,11 +1975,17 @@ def voice_analysis():
                 
                 print(f"Debug: Office number: {office_number}, Floor: {floor}")
                 
-                if office_number and floor:
+                if office_number and (floor or True):
                     room_numbers = extract_room_number(office_number)
                     print(f"Debug: Extracted room numbers: {room_numbers}")
                     
                     if room_numbers:
+                        # If floor is missing, infer from room number
+                        if not floor:
+                            inferred = infer_floor_from_room(room_numbers[0])
+                            if inferred:
+                                floor = inferred
+                                print(f"Debug: Inferred floor from room {room_numbers[0]} -> {floor}")
                         current_room_images = get_room_image(room_numbers, floor)
                         print(f"Debug: Room image paths for this record: {current_room_images}")
                         if current_room_images:
@@ -1933,49 +2040,85 @@ def generate_qr():
         if not query:
             return jsonify({"error": "Query is required"}), 400
         
-        # Search for the office details
+        # DF-first search so QR uses the same dataset/logic as the main page
+        import re as _re
         filtered_data = df[
-            (df["पद"].astype(str).str.contains(re.escape(query), case=False, na=False, regex=True)) |
-            (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(re.escape(query), case=False, na=False, regex=True)) |
-            (df["कार्यालय क्रमांक"].astype(str).str.contains(re.escape(query), case=False, na=False, regex=True))
+            (df["पद"].astype(str).str.contains(_re.escape(query), case=False, na=False, regex=True)) |
+            (df["कार्यालय प्रमुखाचे नाव"].astype(str).str.contains(_re.escape(query), case=False, na=False, regex=True)) |
+            (df["कार्यालय क्रमांक"].astype(str).str.contains(_re.escape(query), case=False, na=False, regex=True))
         ]
-        
+
         if filtered_data.empty:
-            return jsonify({"error": "माहिती सापडली नाही"}), 404
-        
-        # Exclude mobile numbers from QR content
+            # Fuzzy over DF
+            from difflib import SequenceMatcher as _SM
+            def _sim(a, b):
+                return _SM(None, str(a).lower(), str(b).lower()).ratio()
+            candidates = []
+            for idx, row in df.iterrows():
+                score = max(
+                    _sim(row.get("पद", ''), query),
+                    _sim(row.get("कार्यालय प्रमुखाचे नाव", ''), query),
+                    _sim(row.get("कार्यालय क्रमांक", ''), query)
+                )
+                if score >= 0.7:
+                    candidates.append((score, idx))
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            if candidates:
+                filtered_data = df.iloc[[i for _, i in candidates[:5]]]
+
+        # Last resort: DB fallback if DF finds nothing
+        if filtered_data.empty:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute(
+                    """
+                        SELECT * FROM persons 
+                        WHERE (
+                            LOWER(name) LIKE LOWER(%s) OR 
+                            LOWER(position) LIKE LOWER(%s) OR 
+                            LOWER(office_number) LIKE LOWER(%s)
+                        )
+                    """,
+                    (f'%{query}%', f'%{query}%', f'%{query}%')
+                )
+                rows = cursor.fetchall()
+                cursor.close(); conn.close()
+                if rows:
+                    filtered_data = pd.DataFrame(rows)
+            if filtered_data.empty:
+                return jsonify({"error": "माहिती सापडली नाही"}), 404
+
+        # Exclude mobile and collect images/video
         filtered_data = filtered_data.drop(columns=["मोबाईल क्रमांक"], errors='ignore')
-        
-        # Get room images for the content
         room_image_paths = []
         room_video_url = None
         for _, row in filtered_data.iterrows():
-            office_number = row.get("कार्यालय क्रमांक")
-            floor = row.get("मजला")
-            
-            if office_number and floor:
+            office_number = row.get("कार्यालय क्रमांक") if "कार्यालय क्रमांक" in row else row.get("office_number")
+            floor = row.get("मजला") if "मजला" in row else row.get("floor")
+            if office_number and (floor or True):
                 room_numbers = extract_room_number(office_number)
                 if room_numbers:
+                    if not floor:
+                        inferred = infer_floor_from_room(room_numbers[0])
+                        if inferred:
+                            floor = inferred
                     current_room_images = get_room_image(room_numbers, floor)
                     if current_room_images:
                         room_image_paths.extend(current_room_images)
-                        
-                        # Check if any room number has a video
                         for room_num in room_numbers:
                             video_url = get_room_video_url(room_num)
                             if video_url:
                                 room_video_url = video_url
                                 break
                 else:
-                    # If no specific room numbers, get floor plan
                     current_floor_images = get_room_image([], floor)
                     if current_floor_images:
                         room_image_paths.extend(current_floor_images)
-        
-        # Remove duplicates
+
         room_image_paths = list(set(room_image_paths)) if room_image_paths else []
         
-        # Format the content for mobile display
+        # Build textual content similar to voice/search
         content = "\n".join(
             filtered_data.apply(
                 lambda row: "\n".join([f"- {k}: {v}" for k, v in row.dropna().items()]), axis=1
@@ -1987,8 +2130,18 @@ def generate_qr():
         # Generate a unique session ID
         session_id = str(uuid.uuid4())
         
-        # Create mobile display URL using deployed app URL for mobile access
-        mobile_url = f"https://govt-kald.onrender.com/mobile_display/{session_id}"
+        # Build mobile URL. Prefer PUBLIC_BASE_URL or default to Render domain for production
+        public_base = os.getenv('PUBLIC_BASE_URL', 'https://govt-ai-receptionist.onrender.com')
+        forwarded_proto = request.headers.get('X-Forwarded-Proto')
+        forwarded_host = request.headers.get('X-Forwarded-Host')
+        if public_base:
+            base_url = public_base.rstrip('/')
+        elif forwarded_host:
+            scheme = forwarded_proto or request.scheme
+            base_url = f"{scheme}://{forwarded_host}"
+        else:
+            base_url = request.host_url.rstrip('/')
+        mobile_url = f"{base_url}/mobile_display/{session_id}"
         
         # Store the content in a simple way (in production, use a database)
         # For now, we'll pass it as a parameter with proper URL encoding
