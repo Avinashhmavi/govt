@@ -1676,7 +1676,35 @@ def search():
             conn.close()
             return jsonify({"error": f"Database error: {str(e)}"}), 500
         
-        audio_base64 = get_audio_file(result)
+        # Generate audio asynchronously - don't block the response
+        # Return results immediately, audio will be generated in background if possible
+        audio_base64 = None
+        try:
+            # Try to get audio, but don't wait too long (max 2 seconds)
+            import signal
+            
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Audio generation timeout")
+            
+            # Set a timeout for audio generation
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(2)  # 2 second timeout
+            
+            try:
+                audio_base64 = get_audio_file(result)
+            except (TimeoutError, Exception) as e:
+                print(f"Audio generation skipped or failed: {e}")
+                audio_base64 = None
+            finally:
+                signal.alarm(0)  # Cancel the alarm
+        except Exception as e:
+            # If signal is not available (Windows), just try without timeout
+            try:
+                audio_base64 = get_audio_file(result)
+            except Exception as audio_error:
+                print(f"Audio generation failed: {audio_error}")
+                audio_base64 = None
+        
         return jsonify({
             "result": result, 
             "audio": audio_base64,
@@ -1707,6 +1735,10 @@ tts_last_request_time = 0
 tts_lock = threading.Lock()
 MIN_REQUEST_INTERVAL = 5  # Minimum 5 seconds between any TTS requests (global)
 
+# Track if we're being rate limited - if so, skip audio generation for a while
+tts_rate_limited_until = 0
+RATE_LIMIT_COOLDOWN = 300  # Skip audio generation for 5 minutes if rate limited
+
 # Rate limiting semaphore - limit to 1 concurrent TTS request
 tts_semaphore = threading.Semaphore(1)
 
@@ -1731,6 +1763,14 @@ def get_audio_file(text):
             print(f"Error reading cached audio: {e}")
             # Continue to generate new audio if cache read fails
     
+    # Check if we're in rate limit cooldown period
+    global tts_rate_limited_until
+    current_time = time.time()
+    if current_time < tts_rate_limited_until:
+        remaining = int(tts_rate_limited_until - current_time)
+        print(f"Debug: Audio generation skipped - rate limit cooldown active ({remaining}s remaining)")
+        return ""
+    
     # Global rate limiting - ensure minimum time between requests
     global tts_last_request_time
     with tts_lock:
@@ -1745,9 +1785,9 @@ def get_audio_file(text):
     # Rate limiting - acquire semaphore
     print(f"Debug: Generating audio for text (length: {len(text)}), cache dir: {AUDIO_CACHE_DIR}")
     with tts_semaphore:
-        # Retry logic with exponential backoff
-        max_retries = 5  # Increased retries
-        base_delay = 10  # Start with 10 seconds (much longer initial delay for rate limits)
+        # Reduced retries and delays to avoid worker timeouts
+        max_retries = 2  # Only 2 retries to avoid long delays
+        base_delay = 2  # Shorter delays to avoid worker timeouts
         
         for attempt in range(max_retries):
             try:
@@ -1770,6 +1810,8 @@ def get_audio_file(text):
                 except Exception as cache_error:
                     print(f"Warning: Could not cache audio file: {cache_error}")
                 
+                # Reset rate limit cooldown on success
+                tts_rate_limited_until = 0
                 return base64.b64encode(audio_data).decode('utf-8')
                 
             except Exception as e:
@@ -1792,24 +1834,26 @@ def get_audio_file(text):
                     if status_code == 429:
                         is_rate_limit = True
                 
-                if is_rate_limit and attempt < max_retries - 1:
-                    # Exponential backoff: 10s, 20s, 40s, 80s, 160s (much longer delays)
-                    delay = base_delay * (2 ** attempt)
-                    print(f"Rate limit hit (429). Retrying in {delay} seconds (attempt {attempt + 1}/{max_retries})...")
-                    time.sleep(delay)
-                    continue
+                if is_rate_limit:
+                    # Set cooldown period to skip audio generation for a while
+                    tts_rate_limited_until = time.time() + RATE_LIMIT_COOLDOWN
+                    print(f"Rate limit detected. Audio generation will be skipped for {RATE_LIMIT_COOLDOWN} seconds.")
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"Rate limit hit (429). Retrying in {delay} seconds (attempt {attempt + 1}/{max_retries})...")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        print(f"Error generating audio: 429 (Too Many Requests) from TTS API. Audio generation disabled for {RATE_LIMIT_COOLDOWN} seconds.")
+                        return ""
                 elif attempt < max_retries - 1:
                     # For non-rate-limit errors, still retry with shorter delay
-                    delay = 2 * (attempt + 1)
+                    delay = 1 * (attempt + 1)
                     print(f"Error generating audio (attempt {attempt + 1}/{max_retries}): {error_type}: {error_str[:100]}. Retrying in {delay} seconds...")
                     time.sleep(delay)
                     continue
                 else:
-                    # Log error with more details
-                    if is_rate_limit:
-                        print(f"Error generating audio: 429 (Too Many Requests) from TTS API after {max_retries} attempts. Probable cause: Rate limit exceeded. Consider using cached audio or implementing alternative TTS service.")
-                    else:
-                        print(f"Error generating audio after {max_retries} attempts: {error_type}: {e}")
+                    print(f"Error generating audio after {max_retries} attempts: {error_type}: {e}")
                     return ""
         
         # If all retries failed
