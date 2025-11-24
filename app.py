@@ -16,6 +16,9 @@ from datetime import datetime, timedelta
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import json
+import hashlib
+import time
+import threading
 
 # Load environment variables
 load_dotenv()
@@ -1582,7 +1585,24 @@ def search():
             
             if results:
                 result_lines = []
+                seen_entries = set()  # Track unique entries to prevent duplicates
+                
                 for row in results:
+                    # Create a unique key for deduplication based on key fields
+                    entry_key = (
+                        str(row.get('name', '')).strip(),
+                        str(row.get('position', '')).strip(),
+                        str(row.get('office_name', '')).strip(),
+                        str(row.get('office_number', '')).strip()
+                    )
+                    
+                    # Skip if we've already seen this exact entry
+                    if entry_key in seen_entries:
+                        print(f"Debug: Skipping duplicate entry: {row.get('name', 'N/A')} - {row.get('office_number', 'N/A')}")
+                        continue
+                    
+                    seen_entries.add(entry_key)
+                    
                     # Build result string for each person
                     person_info = []
                     if row['name']:
@@ -1667,16 +1687,74 @@ def search():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Function to get audio file
+# Audio cache directory
+AUDIO_CACHE_DIR = os.path.join('static', 'audio_cache')
+os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
+
+# Rate limiting semaphore - limit to 2 concurrent TTS requests
+tts_semaphore = threading.Semaphore(2)
+
+# Function to get audio file with caching and retry logic
 def get_audio_file(text):
-    try:
-        tts = gTTS(text=text, lang='mr')
-        audio_file = io.BytesIO()
-        tts.write_to_fp(audio_file)
-        audio_file.seek(0)
-        return base64.b64encode(audio_file.read()).decode('utf-8')
-    except Exception as e:
-        print(f"Error generating audio: {e}")
+    if not text or not text.strip():
+        return ""
+    
+    # Create hash of text for cache key
+    text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
+    cache_file = os.path.join(AUDIO_CACHE_DIR, f"{text_hash}.mp3")
+    
+    # Check cache first
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'rb') as f:
+                audio_data = f.read()
+                return base64.b64encode(audio_data).decode('utf-8')
+        except Exception as e:
+            print(f"Error reading cached audio: {e}")
+            # Continue to generate new audio if cache read fails
+    
+    # Rate limiting - acquire semaphore
+    with tts_semaphore:
+        # Retry logic with exponential backoff
+        max_retries = 3
+        base_delay = 2  # Start with 2 seconds
+        
+        for attempt in range(max_retries):
+            try:
+                tts = gTTS(text=text, lang='mr')
+                audio_file = io.BytesIO()
+                tts.write_to_fp(audio_file)
+                audio_file.seek(0)
+                audio_data = audio_file.read()
+                
+                # Save to cache
+                try:
+                    with open(cache_file, 'wb') as f:
+                        f.write(audio_data)
+                except Exception as cache_error:
+                    print(f"Warning: Could not cache audio file: {cache_error}")
+                
+                return base64.b64encode(audio_data).decode('utf-8')
+                
+            except Exception as e:
+                error_str = str(e)
+                is_rate_limit = '429' in error_str or 'Too Many Requests' in error_str
+                
+                if is_rate_limit and attempt < max_retries - 1:
+                    # Exponential backoff: 2s, 4s, 8s
+                    delay = base_delay * (2 ** attempt)
+                    print(f"Rate limit hit (429). Retrying in {delay} seconds (attempt {attempt + 1}/{max_retries})...")
+                    time.sleep(delay)
+                    continue
+                else:
+                    # Log error with more details
+                    if is_rate_limit:
+                        print(f"Error generating audio: 429 (Too Many Requests) from TTS API after {max_retries} attempts. Probable cause: Rate limit exceeded")
+                    else:
+                        print(f"Error generating audio: {e}")
+                    return ""
+        
+        # If all retries failed
         return ""
 
 # Audio endpoint (for compatibility)
@@ -1909,7 +1987,15 @@ def voice_analysis():
         
         # Combine all results, rank them, and limit to most relevant
         if all_results:
-            combined_data = pd.concat(all_results, ignore_index=True).drop_duplicates()
+            combined_data = pd.concat(all_results, ignore_index=True)
+            # Deduplicate based on key identifying columns
+            key_columns = ["कार्यालय प्रमुखाचे नाव", "पद", "कार्यालयाचे नाव", "कार्यालय क्रमांक"]
+            # Only use columns that exist in the dataframe
+            existing_key_columns = [col for col in key_columns if col in combined_data.columns]
+            if existing_key_columns:
+                combined_data = combined_data.drop_duplicates(subset=existing_key_columns, keep='first')
+            else:
+                combined_data = combined_data.drop_duplicates()
             
             # Sort by score (highest first) and limit to top 5 results
             if result_scores:

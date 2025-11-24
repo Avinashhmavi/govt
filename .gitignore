@@ -65,6 +65,9 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# Audio cache
+static/audio_cache/
+
 # Scrapy stuff:
 .scrapy
 
