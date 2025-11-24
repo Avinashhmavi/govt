@@ -1676,34 +1676,14 @@ def search():
             conn.close()
             return jsonify({"error": f"Database error: {str(e)}"}), 500
         
-        # Generate audio asynchronously - don't block the response
-        # Return results immediately, audio will be generated in background if possible
+        # Try to get audio, but don't block if it fails (graceful degradation)
+        # Allow enough time for OpenAI fallback if gTTS fails
         audio_base64 = None
         try:
-            # Try to get audio, but don't wait too long (max 2 seconds)
-            import signal
-            
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Audio generation timeout")
-            
-            # Set a timeout for audio generation
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(2)  # 2 second timeout
-            
-            try:
-                audio_base64 = get_audio_file(result)
-            except (TimeoutError, Exception) as e:
-                print(f"Audio generation skipped or failed: {e}")
-                audio_base64 = None
-            finally:
-                signal.alarm(0)  # Cancel the alarm
+            audio_base64 = get_audio_file(result)
         except Exception as e:
-            # If signal is not available (Windows), just try without timeout
-            try:
-                audio_base64 = get_audio_file(result)
-            except Exception as audio_error:
-                print(f"Audio generation failed: {audio_error}")
-                audio_base64 = None
+            print(f"Audio generation failed, continuing without audio: {e}")
+            audio_base64 = None
         
         return jsonify({
             "result": result, 
@@ -1835,17 +1815,11 @@ def get_audio_file(text):
                         is_rate_limit = True
                 
                 if is_rate_limit:
-                    # Set cooldown period to skip audio generation for a while
+                    # Immediately fallback to OpenAI TTS when rate limit detected
+                    print(f"gTTS rate limit detected (429). Immediately falling back to OpenAI TTS...")
+                    # Set cooldown period to skip gTTS for a while (but allow OpenAI)
                     tts_rate_limited_until = time.time() + RATE_LIMIT_COOLDOWN
-                    print(f"Rate limit detected. Audio generation will be skipped for {RATE_LIMIT_COOLDOWN} seconds.")
-                    if attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt)
-                        print(f"Rate limit hit (429). Retrying in {delay} seconds (attempt {attempt + 1}/{max_retries})...")
-                        time.sleep(delay)
-                        continue
-                    else:
-                        print(f"gTTS failed with rate limit. Falling back to OpenAI TTS...")
-                        break  # Break out of gTTS retry loop to try OpenAI
+                    break  # Break out of gTTS retry loop to try OpenAI immediately
                 elif attempt < max_retries - 1:
                     # For non-rate-limit errors, still retry with shorter delay
                     delay = 1 * (attempt + 1)
