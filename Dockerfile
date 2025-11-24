@@ -25,8 +25,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Create non-root user and ensure cache directories are writable
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app && \
+    mkdir -p /app/static/audio_cache /tmp/audio_cache && \
+    chown -R appuser:appuser /app/static/audio_cache /tmp/audio_cache && \
+    chmod -R 755 /app/static/audio_cache /tmp/audio_cache
 USER appuser
 
 # Expose port
