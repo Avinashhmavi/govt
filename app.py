@@ -2330,7 +2330,7 @@ def generate_qr():
         session_id = str(uuid.uuid4())
         
         # Build mobile URL. Prefer PUBLIC_BASE_URL or default to Render domain for production
-        public_base = os.getenv('PUBLIC_BASE_URL', 'https://govt-ai-receptionist.onrender.com')
+        public_base = os.getenv('PUBLIC_BASE_URL', 'https://ai-receptionist-60yk.onrender.com')
         forwarded_proto = request.headers.get('X-Forwarded-Proto')
         forwarded_host = request.headers.get('X-Forwarded-Host')
         if public_base:
