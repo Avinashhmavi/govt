@@ -1844,8 +1844,8 @@ def get_audio_file(text):
                         time.sleep(delay)
                         continue
                     else:
-                        print(f"Error generating audio: 429 (Too Many Requests) from TTS API. Audio generation disabled for {RATE_LIMIT_COOLDOWN} seconds.")
-                        return ""
+                        print(f"gTTS failed with rate limit. Falling back to OpenAI TTS...")
+                        break  # Break out of gTTS retry loop to try OpenAI
                 elif attempt < max_retries - 1:
                     # For non-rate-limit errors, still retry with shorter delay
                     delay = 1 * (attempt + 1)
@@ -1853,11 +1853,48 @@ def get_audio_file(text):
                     time.sleep(delay)
                     continue
                 else:
-                    print(f"Error generating audio after {max_retries} attempts: {error_type}: {e}")
-                    return ""
+                    print(f"gTTS failed after {max_retries} attempts. Falling back to OpenAI TTS...")
+                    break  # Break out of gTTS retry loop to try OpenAI
         
-        # If all retries failed
-        return ""
+        # If gTTS failed, try OpenAI TTS as fallback
+        if client:
+            try:
+                print(f"Debug: Attempting OpenAI TTS fallback for text (length: {len(text)})")
+                # OpenAI TTS API - supports multiple languages including Marathi
+                response = client.audio.speech.create(
+                    model="tts-1",  # Use tts-1 for faster/cheaper, or tts-1-hd for higher quality
+                    voice="nova",  # Options: alloy, echo, fable, onyx, nova, shimmer (nova works well for Indian languages)
+                    input=text
+                )
+                
+                # Read the audio data
+                audio_data = response.content
+                
+                if audio_data and len(audio_data) > 0:
+                    print(f"Debug: Successfully generated audio using OpenAI TTS (size: {len(audio_data)} bytes)")
+                    
+                    # Save to cache (same cache file as gTTS)
+                    try:
+                        with open(cache_file, 'wb') as f:
+                            f.write(audio_data)
+                    except Exception as cache_error:
+                        print(f"Warning: Could not cache audio file: {cache_error}")
+                    
+                    # Reset rate limit cooldown on success
+                    tts_rate_limited_until = 0
+                    return base64.b64encode(audio_data).decode('utf-8')
+                else:
+                    print(f"Error: OpenAI TTS returned empty audio data")
+                    return ""
+                    
+            except Exception as openai_error:
+                error_msg = str(openai_error)
+                print(f"Error generating audio with OpenAI TTS: {error_msg}")
+                # Don't set cooldown for OpenAI errors, just return empty
+                return ""
+        else:
+            print(f"OpenAI client not available for TTS fallback. Audio generation failed.")
+            return ""
 
 # Audio endpoint (for compatibility)
 @app.route('/get_audio', methods=['POST'])
