@@ -1702,7 +1702,12 @@ except (OSError, PermissionError) as e:
     os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
     print(f"Warning: Using fallback cache directory: {AUDIO_CACHE_DIR}")
 
-# Rate limiting semaphore - limit to 1 concurrent TTS request to reduce rate limiting
+# Global rate limiting - track last request time across all workers
+tts_last_request_time = 0
+tts_lock = threading.Lock()
+MIN_REQUEST_INTERVAL = 5  # Minimum 5 seconds between any TTS requests (global)
+
+# Rate limiting semaphore - limit to 1 concurrent TTS request
 tts_semaphore = threading.Semaphore(1)
 
 # Function to get audio file with caching and retry logic
@@ -1726,12 +1731,23 @@ def get_audio_file(text):
             print(f"Error reading cached audio: {e}")
             # Continue to generate new audio if cache read fails
     
+    # Global rate limiting - ensure minimum time between requests
+    global tts_last_request_time
+    with tts_lock:
+        current_time = time.time()
+        time_since_last = current_time - tts_last_request_time
+        if time_since_last < MIN_REQUEST_INTERVAL:
+            wait_time = MIN_REQUEST_INTERVAL - time_since_last
+            print(f"Debug: Global rate limit - waiting {wait_time:.1f} seconds before next TTS request...")
+            time.sleep(wait_time)
+        tts_last_request_time = time.time()
+    
     # Rate limiting - acquire semaphore
     print(f"Debug: Generating audio for text (length: {len(text)}), cache dir: {AUDIO_CACHE_DIR}")
     with tts_semaphore:
         # Retry logic with exponential backoff
         max_retries = 5  # Increased retries
-        base_delay = 3  # Start with 3 seconds (longer initial delay)
+        base_delay = 10  # Start with 10 seconds (much longer initial delay for rate limits)
         
         for attempt in range(max_retries):
             try:
@@ -1770,7 +1786,6 @@ def get_audio_file(text):
                 )
                 
                 # Also check for HTTP status codes in the error
-                import re
                 http_status_match = re.search(r'(\d{3})', error_str)
                 if http_status_match:
                     status_code = int(http_status_match.group(1))
@@ -1778,21 +1793,21 @@ def get_audio_file(text):
                         is_rate_limit = True
                 
                 if is_rate_limit and attempt < max_retries - 1:
-                    # Exponential backoff: 3s, 6s, 12s, 24s, 48s
+                    # Exponential backoff: 10s, 20s, 40s, 80s, 160s (much longer delays)
                     delay = base_delay * (2 ** attempt)
                     print(f"Rate limit hit (429). Retrying in {delay} seconds (attempt {attempt + 1}/{max_retries})...")
                     time.sleep(delay)
                     continue
                 elif attempt < max_retries - 1:
                     # For non-rate-limit errors, still retry with shorter delay
-                    delay = 1 * (attempt + 1)
+                    delay = 2 * (attempt + 1)
                     print(f"Error generating audio (attempt {attempt + 1}/{max_retries}): {error_type}: {error_str[:100]}. Retrying in {delay} seconds...")
                     time.sleep(delay)
                     continue
                 else:
                     # Log error with more details
                     if is_rate_limit:
-                        print(f"Error generating audio: 429 (Too Many Requests) from TTS API after {max_retries} attempts. Probable cause: Rate limit exceeded")
+                        print(f"Error generating audio: 429 (Too Many Requests) from TTS API after {max_retries} attempts. Probable cause: Rate limit exceeded. Consider using cached audio or implementing alternative TTS service.")
                     else:
                         print(f"Error generating audio after {max_retries} attempts: {error_type}: {e}")
                     return ""
