@@ -19,6 +19,7 @@ import json
 import hashlib
 import time
 import threading
+import logging
 
 # Load environment variables
 load_dotenv()
@@ -30,6 +31,12 @@ DB_PORT = os.getenv("DB_PORT")
 DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+# Google Sheets configuration
+GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH", "gcp.json")
+GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "1XT3A8iW5gbWl76qSeSQZ-6BG2hUluGbx24VYxwr1HkE")
+GOOGLE_SHEET_NAME = os.getenv("GOOGLE_SHEET_NAME", "Sheet1")
+SYNC_INTERVAL_MINUTES = float(os.getenv("SYNC_INTERVAL_MINUTES", "0.5"))  # Default 30 seconds for instant sync
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', static_url_path='/static')
@@ -44,6 +51,23 @@ if openai_api_key:
     except Exception as e:
         print(f"Warning: Could not initialize OpenAI client: {e}")
         client = None
+
+# Initialize Google Sheets sync service
+sheets_sync = None
+try:
+    from google_sheets_sync import GoogleSheetsSync
+    if os.path.exists(GOOGLE_SHEETS_CREDENTIALS_PATH):
+        sheets_sync = GoogleSheetsSync(
+            credentials_path=GOOGLE_SHEETS_CREDENTIALS_PATH,
+            sheet_id=GOOGLE_SHEET_ID,
+            worksheet_name=GOOGLE_SHEET_NAME
+        )
+        print(f"Google Sheets sync initialized successfully")
+    else:
+        print(f"Warning: Google Sheets credentials file not found: {GOOGLE_SHEETS_CREDENTIALS_PATH}")
+except Exception as e:
+    print(f"Warning: Could not initialize Google Sheets sync: {e}")
+    sheets_sync = None
 
 # Floor mapping from Marathi to English
 floor_mapping = {
@@ -2656,17 +2680,31 @@ def toggle_person(person_id):
         return jsonify({'success': False, 'error': 'Database connection error'})
     
     try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT is_available FROM persons WHERE id = %s", (person_id,))
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT name, office_number, is_available FROM persons WHERE id = %s", (person_id,))
         result = cursor.fetchone()
         
         if result:
-            new_status = not result[0]
+            new_status = not result['is_available']
             cursor.execute(
                 "UPDATE persons SET is_available = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                 (new_status, person_id)
             )
             conn.commit()
+            
+            # Update Google Sheet if sync is enabled
+            if sheets_sync:
+                try:
+                    name = result['name'] or ''
+                    office_number = result['office_number'] or ''
+                    success = sheets_sync.update_availability(name, office_number, new_status)
+                    if not success:
+                        print(f"Warning: Could not update Google Sheet for {name} ({office_number})")
+                except Exception as e:
+                    print(f"Warning: Failed to update Google Sheet: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
             cursor.close()
             conn.close()
             return jsonify({'success': True, 'is_available': new_status})
@@ -2684,6 +2722,97 @@ def toggle_person(person_id):
 def admin_logout():
     session.pop('admin_logged_in', None)
     return redirect(url_for('directory'))
+
+@app.route('/admin/sync_sheets', methods=['POST'])
+@admin_required
+def sync_sheets():
+    """Manual sync endpoint - syncs from Google Sheet to database."""
+    if not sheets_sync:
+        return jsonify({
+            'success': False,
+            'error': 'Google Sheets sync is not configured'
+        })
+    
+    try:
+        # Get counts before sync
+        conn_before = get_db_connection()
+        cursor_before = conn_before.cursor()
+        cursor_before.execute("SELECT COUNT(*) as total, SUM(CASE WHEN is_available THEN 1 ELSE 0 END) as available FROM persons")
+        before_stats = cursor_before.fetchone()
+        cursor_before.close()
+        conn_before.close()
+        
+        # Run sync
+        updated_count, error_count, error_messages = sheets_sync.sync_sheet_to_db(get_db_connection)
+        
+        # Get counts after sync
+        conn_after = get_db_connection()
+        cursor_after = conn_after.cursor()
+        cursor_after.execute("SELECT COUNT(*) as total, SUM(CASE WHEN is_available THEN 1 ELSE 0 END) as available FROM persons")
+        after_stats = cursor_after.fetchone()
+        cursor_after.close()
+        conn_after.close()
+        
+        return jsonify({
+            'success': True,
+            'updated_count': updated_count,
+            'error_count': error_count,
+            'error_messages': error_messages[:10],  # Limit to first 10 errors
+            'message': f'Sync completed: {updated_count} updated, {error_count} errors',
+            'before_available': before_stats[1] or 0,
+            'after_available': after_stats[1] or 0,
+            'total': after_stats[0] or 0
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/admin/initialize_sheet', methods=['POST'])
+@admin_required
+def initialize_sheet():
+    """Initialize Google Sheet with headers and populate with all database data."""
+    if not sheets_sync:
+        return jsonify({
+            'success': False,
+            'error': 'Google Sheets sync is not configured'
+        })
+    
+    try:
+        success, message, rows_added = sheets_sync.initialize_sheet(get_db_connection)
+        
+        return jsonify({
+            'success': success,
+            'message': message,
+            'rows_added': rows_added
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+def background_sync_worker():
+    """Background thread that periodically syncs Google Sheet to database."""
+    if not sheets_sync:
+        print("Google Sheets sync not available, background sync disabled")
+        return
+    
+    sync_interval_seconds = SYNC_INTERVAL_MINUTES * 60
+    
+    while True:
+        try:
+            time.sleep(sync_interval_seconds)
+            updated_count, error_count, error_messages = sheets_sync.sync_sheet_to_db(get_db_connection)
+            if updated_count > 0:
+                print(f"✓ Auto-sync: {updated_count} updated at {datetime.now().strftime('%H:%M:%S')}")
+            # Don't print "no changes" to reduce log noise with frequent polling
+            if error_messages:
+                print(f"Sync errors: {error_messages[:3]}")  # Print first 3 errors
+        except Exception as e:
+            print(f"Error in background sync: {e}")
+            # Continue running even if sync fails
 
 # Update the directory route to use database
 @app.route('/directory')
@@ -2735,6 +2864,17 @@ def directory():
 if __name__ == '__main__':
     # Initialize database on startup
     init_database()
+    
+    # Start background sync thread if Google Sheets sync is enabled
+    if sheets_sync:
+        sync_thread = threading.Thread(target=background_sync_worker, daemon=True)
+        sync_thread.start()
+        if SYNC_INTERVAL_MINUTES < 1:
+            print(f"✓ Instant sync enabled (every {int(SYNC_INTERVAL_MINUTES * 60)} seconds)")
+        elif SYNC_INTERVAL_MINUTES == int(SYNC_INTERVAL_MINUTES):
+            print(f"✓ Background sync started (every {int(SYNC_INTERVAL_MINUTES)} minutes)")
+        else:
+            print(f"✓ Background sync started (every {SYNC_INTERVAL_MINUTES} minutes)")
     
     port = int(os.getenv("PORT", 5009))
     app.run(host='0.0.0.0', port=port, debug=False)

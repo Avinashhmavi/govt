@@ -110,6 +110,77 @@
             box-shadow: 0 8px 20px rgba(220, 53, 69, 0.3);
         }
 
+        .sync-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .sync-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(40, 167, 69, 0.3);
+        }
+
+        .sync-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .sync-status {
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .sync-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .sync-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .sync-status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .sync-status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .sync-status-title {
+            font-weight: 600;
+        }
+
+        .sync-status-time {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .sync-status-details {
+            margin-top: 8px;
+            font-size: 13px;
+        }
+
         .stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -310,6 +381,17 @@
                 width: 100%;
             }
 
+            .admin-controls > div:last-child {
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .sync-btn, .logout-btn, #initBtn {
+                width: 100%;
+            }
+
             .person-row {
                 grid-template-columns: 1fr;
                 gap: 10px;
@@ -333,9 +415,29 @@
             <div class="search-box">
                 <input type="text" id="searchInput" placeholder="व्यक्ती शोधा..." onkeyup="filterPersons()">
             </div>
-            <button class="logout-btn" onclick="logout()">
-                बाहेर पडा
-            </button>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="sync-btn" id="syncBtn" onclick="syncWithSheets()">
+                    <span id="syncBtnText">Google Sheets सह सिंक करा</span>
+                </button>
+                <button class="sync-btn" id="initBtn" onclick="initializeSheet()" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+                    <span id="initBtnText">Sheet सेटअप करा</span>
+                </button>
+                <button class="logout-btn" onclick="logout()">
+                    बाहेर पडा
+                </button>
+            </div>
+        </div>
+
+        <div class="sync-status" id="syncStatus" style="display: none;">
+            <div class="sync-status-header">
+                <span class="sync-status-title" id="syncStatusTitle">सिंक स्थिती</span>
+                <span class="sync-status-time" id="syncStatusTime"></span>
+            </div>
+            <div class="sync-status-details" id="syncStatusDetails"></div>
+        </div>
+        
+        <div style="text-align: center; margin: 10px 0; font-size: 12px; color: #6c757d;">
+            <span>💡 पृष्ठ रीफ्रेश करा जर डेटा अपडेट नसेल तर</span>
         </div>
 
         <div class="stats">
@@ -496,9 +598,137 @@
             }
         }
 
+        // Sync with Google Sheets
+        async function syncWithSheets() {
+            const syncBtn = document.getElementById('syncBtn');
+            const syncBtnText = document.getElementById('syncBtnText');
+            const syncStatus = document.getElementById('syncStatus');
+            const syncStatusTitle = document.getElementById('syncStatusTitle');
+            const syncStatusDetails = document.getElementById('syncStatusDetails');
+            const syncStatusTime = document.getElementById('syncStatusTime');
+
+            // Disable button and show loading
+            syncBtn.disabled = true;
+            syncBtnText.textContent = 'सिंक होत आहे...';
+            syncStatus.className = 'sync-status info';
+            syncStatus.style.display = 'block';
+            syncStatusTitle.textContent = 'सिंक होत आहे...';
+            syncStatusDetails.textContent = 'कृपया प्रतीक्षा करा';
+            syncStatusTime.textContent = new Date().toLocaleTimeString('mr-IN');
+
+            try {
+                const response = await fetch('/admin/sync_sheets', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    syncStatus.className = 'sync-status success';
+                    syncStatusTitle.textContent = 'सिंक यशस्वी';
+                    const beforeText = data.before_available !== undefined ? ` (पूर्वी: ${data.before_available} उपलब्ध)` : '';
+                    const afterText = data.after_available !== undefined ? ` (आता: ${data.after_available} उपलब्ध)` : '';
+                    syncStatusDetails.textContent = `${data.updated_count} व्यक्ती अपडेट झाल्या.${beforeText}${afterText} ${data.error_count > 0 ? data.error_count + ' त्रुटी.' : ''}`;
+                    
+                    // Reload page to get fresh data from server after 1.5 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    syncStatus.className = 'sync-status error';
+                    syncStatusTitle.textContent = 'सिंक अयशस्वी';
+                    syncStatusDetails.textContent = data.error || 'अज्ञात त्रुटी';
+                }
+            } catch (error) {
+                syncStatus.className = 'sync-status error';
+                syncStatusTitle.textContent = 'सिंक अयशस्वी';
+                syncStatusDetails.textContent = 'त्रुटी: ' + error.message;
+            } finally {
+                syncBtn.disabled = false;
+                syncBtnText.textContent = 'Google Sheets सह सिंक करा';
+                syncStatusTime.textContent = new Date().toLocaleTimeString('mr-IN');
+            }
+        }
+
+        // Initialize Google Sheet with all data
+        async function initializeSheet() {
+            if (!confirm('हे Google Sheet पूर्णपणे रिकामे करेल आणि डेटाबेसमधील सर्व डेटासह पुन्हा सेटअप करेल. तुम्हाला खात्री आहे?')) {
+                return;
+            }
+
+            const initBtn = document.getElementById('initBtn');
+            const initBtnText = document.getElementById('initBtnText');
+            const syncStatus = document.getElementById('syncStatus');
+            const syncStatusTitle = document.getElementById('syncStatusTitle');
+            const syncStatusDetails = document.getElementById('syncStatusDetails');
+            const syncStatusTime = document.getElementById('syncStatusTime');
+
+            // Disable button and show loading
+            initBtn.disabled = true;
+            initBtnText.textContent = 'सेटअप होत आहे...';
+            syncStatus.className = 'sync-status info';
+            syncStatus.style.display = 'block';
+            syncStatusTitle.textContent = 'Sheet सेटअप होत आहे...';
+            syncStatusDetails.textContent = 'कृपया प्रतीक्षा करा, हे काही वेळ घेऊ शकते...';
+            syncStatusTime.textContent = new Date().toLocaleTimeString('mr-IN');
+
+            try {
+                const response = await fetch('/admin/initialize_sheet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    syncStatus.className = 'sync-status success';
+                    syncStatusTitle.textContent = 'Sheet सेटअप यशस्वी';
+                    syncStatusDetails.textContent = data.message || `${data.rows_added} व्यक्ती जोडल्या गेल्या.`;
+                } else {
+                    syncStatus.className = 'sync-status error';
+                    syncStatusTitle.textContent = 'Sheet सेटअप अयशस्वी';
+                    syncStatusDetails.textContent = data.error || data.message || 'अज्ञात त्रुटी';
+                }
+            } catch (error) {
+                syncStatus.className = 'sync-status error';
+                syncStatusTitle.textContent = 'Sheet सेटअप अयशस्वी';
+                syncStatusDetails.textContent = 'त्रुटी: ' + error.message;
+            } finally {
+                initBtn.disabled = false;
+                initBtnText.textContent = 'Sheet सेटअप करा';
+                syncStatusTime.textContent = new Date().toLocaleTimeString('mr-IN');
+            }
+        }
+
+        // Auto-refresh stats every 30 seconds to show latest sync results
+        setInterval(function() {
+            // Reload persons data from server
+            fetch('/admin')
+                .then(response => response.text())
+                .then(html => {
+                    // Parse and update stats if needed
+                    // For now, just reload the page every 2 minutes
+                });
+        }, 120000); // Refresh every 2 minutes
+
         // Load data when page loads
         document.addEventListener('DOMContentLoaded', function() {
             loadPersons();
+            
+            // Show message if stats don't match
+            setTimeout(function() {
+                const available = allPersons.filter(p => p.is_available).length;
+                const unavailable = allPersons.length - available;
+                
+                if (available === 0 && allPersons.length > 0) {
+                    console.warn('All persons showing as unavailable - data may be stale. Click sync button or refresh page.');
+                }
+            }, 1000);
         });
     </script>
 </body>
