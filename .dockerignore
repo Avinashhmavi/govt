@@ -33,6 +33,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Credentials (should be provided via environment variables)
+gcp.json
+
 # IDE
 .vscode/
 .idea/

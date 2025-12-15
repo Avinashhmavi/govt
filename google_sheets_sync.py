@@ -6,8 +6,13 @@ Handles bidirectional sync between Google Sheets and PostgreSQL database.
 import gspread
 from google.oauth2.service_account import Credentials
 import os
+import json
 import logging
 from typing import List, Dict, Optional, Tuple
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,10 +45,50 @@ class GoogleSheetsSync:
                 "https://spreadsheets.google.com/feeds",
                 "https://www.googleapis.com/auth/drive"
             ]
-            creds = Credentials.from_service_account_file(
-                self.credentials_path,
-                scopes=scope
-            )
+            
+            # Try to load credentials from environment variables first (for Render/cloud deployments)
+            gcp_type = os.getenv("GCP_TYPE")
+            gcp_project_id = os.getenv("GCP_PROJECT_ID")
+            gcp_private_key_id = os.getenv("GCP_PRIVATE_KEY_ID")
+            gcp_private_key = os.getenv("GCP_PRIVATE_KEY")
+            gcp_client_email = os.getenv("GCP_CLIENT_EMAIL")
+            gcp_client_id = os.getenv("GCP_CLIENT_ID")
+            
+            if all([gcp_type, gcp_project_id, gcp_private_key_id, gcp_private_key, gcp_client_email, gcp_client_id]):
+                # Load from environment variables
+                # Strip quotes if present and replace escaped newlines in private_key
+                private_key = gcp_private_key.strip('"\'')
+                private_key = private_key.replace('\\n', '\n')
+                
+                creds_dict = {
+                    "type": gcp_type,
+                    "project_id": gcp_project_id,
+                    "private_key_id": gcp_private_key_id,
+                    "private_key": private_key,
+                    "client_email": gcp_client_email,
+                    "client_id": gcp_client_id,
+                    "auth_uri": os.getenv("GCP_AUTH_URI", "https://accounts.google.com/o/oauth2/auth"),
+                    "token_uri": os.getenv("GCP_TOKEN_URI", "https://oauth2.googleapis.com/token"),
+                    "auth_provider_x509_cert_url": os.getenv("GCP_AUTH_PROVIDER_X509_CERT_URL", "https://www.googleapis.com/oauth2/v1/certs"),
+                    "client_x509_cert_url": os.getenv("GCP_CLIENT_X509_CERT_URL", ""),
+                    "universe_domain": os.getenv("GCP_UNIVERSE_DOMAIN", "googleapis.com")
+                }
+                
+                creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+                logger.info("Loaded Google Sheets credentials from environment variables")
+            elif os.path.exists(self.credentials_path):
+                # Fallback to file (for local development)
+                creds = Credentials.from_service_account_file(
+                    self.credentials_path,
+                    scopes=scope
+                )
+                logger.info(f"Loaded Google Sheets credentials from file: {self.credentials_path}")
+            else:
+                raise FileNotFoundError(
+                    f"Google Sheets credentials not found. Either set GCP_* environment variables "
+                    f"or provide file at {self.credentials_path}"
+                )
+            
             self.client = gspread.authorize(creds)
             self.sheet = self.client.open_by_key(self.sheet_id)
             self.worksheet = self.sheet.worksheet(self.worksheet_name)
