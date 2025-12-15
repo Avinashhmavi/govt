@@ -56,17 +56,34 @@ if openai_api_key:
 sheets_sync = None
 try:
     from google_sheets_sync import GoogleSheetsSync
-    if os.path.exists(GOOGLE_SHEETS_CREDENTIALS_PATH):
+    
+    # Check if credentials are available (either via env vars or file)
+    has_env_creds = all([
+        os.getenv("GCP_TYPE"),
+        os.getenv("GCP_PROJECT_ID"),
+        os.getenv("GCP_PRIVATE_KEY_ID"),
+        os.getenv("GCP_PRIVATE_KEY"),
+        os.getenv("GCP_CLIENT_EMAIL"),
+        os.getenv("GCP_CLIENT_ID")
+    ])
+    has_file_creds = os.path.exists(GOOGLE_SHEETS_CREDENTIALS_PATH)
+    
+    if has_env_creds or has_file_creds:
+        # google_sheets_sync.py will automatically use env vars if available, otherwise file
         sheets_sync = GoogleSheetsSync(
-            credentials_path=GOOGLE_SHEETS_CREDENTIALS_PATH,
+            credentials_path=GOOGLE_SHEETS_CREDENTIALS_PATH,  # Will be ignored if env vars are set
             sheet_id=GOOGLE_SHEET_ID,
             worksheet_name=GOOGLE_SHEET_NAME
         )
         print(f"Google Sheets sync initialized successfully")
     else:
-        print(f"Warning: Google Sheets credentials file not found: {GOOGLE_SHEETS_CREDENTIALS_PATH}")
+        print(f"Warning: Google Sheets credentials not found.")
+        print(f"  Set GCP_* environment variables (GCP_TYPE, GCP_PROJECT_ID, GCP_PRIVATE_KEY, etc.)")
+        print(f"  OR provide credentials file at: {GOOGLE_SHEETS_CREDENTIALS_PATH}")
 except Exception as e:
     print(f"Warning: Could not initialize Google Sheets sync: {e}")
+    import traceback
+    traceback.print_exc()
     sheets_sync = None
 
 # Floor mapping from Marathi to English
