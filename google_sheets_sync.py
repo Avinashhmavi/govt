@@ -112,9 +112,9 @@ class GoogleSheetsSync:
                 logger.warning("Google Sheet is empty")
                 return []
             
-            # Assume first row is header
+            # First row (index 0) is date row, second row (index 1) is header
             # Expected columns: Name (नाव) | Office Number (कार्यालय क्रमांक) | Availability Status (उपलब्धता)
-            header = all_values[0] if all_values else []
+            header = all_values[1] if len(all_values) > 1 else (all_values[0] if all_values else [])
             
             # Find column indices (case-insensitive)
             name_col = None
@@ -144,9 +144,10 @@ class GoogleSheetsSync:
             if status_col is None:
                 status_col = 2
             
-            # Parse data rows
+            # Parse data rows (skip date row and header row)
             data = []
-            for row_idx, row in enumerate(all_values[1:], start=2):  # Start from row 2 (after header)
+            start_idx = 2 if len(all_values) > 1 else 1  # Skip date row (0) and header (1)
+            for row_idx, row in enumerate(all_values[start_idx:], start=start_idx+1):  # Start from row 3 (after date and header)
                 if len(row) <= max(name_col, office_col, status_col):
                     continue
                 
@@ -215,8 +216,10 @@ class GoogleSheetsSync:
             if not all_values:
                 return None
             
-            # Find column indices
-            header = all_values[0]
+            # Find column indices (skip date row if present)
+            # Header is at index 1 if date row exists, otherwise index 0
+            header_idx = 1 if len(all_values) > 1 and ('📅' in str(all_values[0][0]) or 'Today' in str(all_values[0][0])) else 0
+            header = all_values[header_idx] if len(all_values) > header_idx else []
             name_col = None
             office_col = None
             
@@ -232,11 +235,12 @@ class GoogleSheetsSync:
             if office_col is None:
                 office_col = 1
             
-            # Search for matching row
+            # Search for matching row (skip date row and header)
             name_clean = name.strip() if name else ""
             office_clean = office_number.strip() if office_number else ""
             
-            for row_idx, row in enumerate(all_values[1:], start=2):
+            start_idx = header_idx + 1  # Start after header (and date row if present)
+            for row_idx, row in enumerate(all_values[start_idx:], start=start_idx+1):
                 if len(row) <= max(name_col, office_col):
                     continue
                 
@@ -291,9 +295,11 @@ class GoogleSheetsSync:
                 logger.warning(f"Person not found in sheet: {name}, {office_number}")
                 return False
             
-            # Find status column
+            # Find status column (account for date row if present)
             all_values = self.worksheet.get_all_values()
-            header = all_values[0] if all_values else []
+            # Header is at index 1 if date row exists, otherwise index 0
+            header_idx = 1 if len(all_values) > 1 and ('📅' in str(all_values[0][0]) or 'Today' in str(all_values[0][0])) else 0
+            header = all_values[header_idx] if len(all_values) > header_idx else []
             status_col = None
             
             for idx, col in enumerate(header):
@@ -346,7 +352,9 @@ class GoogleSheetsSync:
                 return (0, 1, error_messages)
             
             try:
-                cursor = conn.cursor()
+                from psycopg2.extras import RealDictCursor
+                from datetime import date
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
                 
                 for item in sheet_data:
                     try:
@@ -365,42 +373,89 @@ class GoogleSheetsSync:
                             error_count += 1
                             continue
                         
+                        # First, get the current person record to check if status changed
+                        person_id = None
+                        old_status = None
+                        
                         # Try exact match first
                         if name and name != '---':
                             # Match by both name and office_number (exact match)
                             cursor.execute("""
-                                UPDATE persons 
-                                SET is_available = %s, updated_at = CURRENT_TIMESTAMP
+                                SELECT id, is_available FROM persons 
                                 WHERE office_number = %s AND name = %s
-                            """, (is_available, office_number, name))
+                            """, (office_number, name))
+                            result = cursor.fetchone()
                             
-                            if cursor.rowcount > 0:
-                                updated_count += 1
-                                continue
+                            if result:
+                                person_id = result['id']
+                                old_status = result['is_available']
+                            else:
+                                # Try flexible name matching
+                                cursor.execute("""
+                                    SELECT id, is_available FROM persons 
+                                    WHERE office_number = %s AND name ILIKE %s
+                                """, (office_number, f"%{name}%"))
+                                result = cursor.fetchone()
+                                
+                                if result:
+                                    person_id = result['id']
+                                    old_status = result['is_available']
+                        else:
+                            # Match by office_number only (for rows with empty/null names)
+                            cursor.execute("""
+                                SELECT id, is_available FROM persons 
+                                WHERE office_number = %s AND (name IS NULL OR name = '' OR name = '---' OR name = 'N/A')
+                            """, (office_number,))
+                            result = cursor.fetchone()
                             
-                            # Try flexible name matching
+                            if result:
+                                person_id = result['id']
+                                old_status = result['is_available']
+                        
+                        if not person_id:
+                            error_messages.append(f"Person not found: name='{name}', office='{office_number}'")
+                            error_count += 1
+                            continue
+                        
+                        # Only update if status actually changed
+                        if old_status != is_available:
+                            # Update the person's availability
                             cursor.execute("""
                                 UPDATE persons 
                                 SET is_available = %s, updated_at = CURRENT_TIMESTAMP
-                                WHERE office_number = %s AND name ILIKE %s
-                            """, (is_available, office_number, f"%{name}%"))
+                                WHERE id = %s
+                            """, (is_available, person_id))
                             
-                            if cursor.rowcount > 0:
-                                updated_count += 1
-                                continue
-                        
-                        # Match by office_number only (for rows with empty/null names)
-                        cursor.execute("""
-                            UPDATE persons 
-                            SET is_available = %s, updated_at = CURRENT_TIMESTAMP
-                            WHERE office_number = %s AND (name IS NULL OR name = '' OR name = '---' OR name = 'N/A')
-                        """, (is_available, office_number))
-                        
-                        if cursor.rowcount > 0:
+                            # Log the change to history tables
+                            today = date.today()
+                            
+                            # Insert into availability_history
+                            cursor.execute("""
+                                INSERT INTO availability_history (person_id, name, office_number, is_available, change_source)
+                                VALUES (%s, %s, %s, %s, 'sheet')
+                            """, (person_id, name, office_number, is_available))
+                            
+                            # Insert/update daily_availability_snapshots
+                            cursor.execute("""
+                                INSERT INTO daily_availability_snapshots (person_id, name, office_number, is_available, snapshot_date)
+                                VALUES (%s, %s, %s, %s, %s)
+                                ON CONFLICT (person_id, snapshot_date) 
+                                DO UPDATE SET 
+                                    is_available = EXCLUDED.is_available,
+                                    snapshot_time = CURRENT_TIME,
+                                    name = EXCLUDED.name,
+                                    office_number = EXCLUDED.office_number
+                            """, (person_id, name, office_number, is_available, today))
+                            
                             updated_count += 1
                         else:
-                            error_messages.append(f"Person not found: name='{name}', office='{office_number}'")
-                            error_count += 1
+                            # Status hasn't changed, but update snapshot if it doesn't exist for today
+                            today = date.today()
+                            cursor.execute("""
+                                INSERT INTO daily_availability_snapshots (person_id, name, office_number, is_available, snapshot_date)
+                                VALUES (%s, %s, %s, %s, %s)
+                                ON CONFLICT (person_id, snapshot_date) DO NOTHING
+                            """, (person_id, name, office_number, is_available, today))
                                 
                     except Exception as e:
                         error_messages.append(f"Error updating {item.get('name', 'unknown')}: {str(e)}")
@@ -453,10 +508,14 @@ class GoogleSheetsSync:
             finally:
                 conn.close()
             
-            # Ensure header row exists
+            # Ensure date row and header row exist
             all_values = self.worksheet.get_all_values()
             if not all_values or len(all_values) == 0:
-                # Create header row
+                # Create date row and header row
+                from datetime import datetime
+                today = datetime.now()
+                date_display = f"📅 Today: {today.strftime('%d-%b-%Y')}"
+                self.worksheet.append_row([date_display])
                 self.worksheet.append_row([
                     "Name (नाव)",
                     "Office Number (कार्यालय क्रमांक)",
@@ -482,8 +541,21 @@ class GoogleSheetsSync:
                             error_count += 1
                             error_messages.append(f"Failed to update: {name}")
                     else:
-                        # Add new row
+                        # Add new row (after date and header rows)
                         status_text = "✅ Available / उपलब्ध" if is_available else "❌ Unavailable / अनुपलब्ध"
+                        # Check if date row exists, if not add it first
+                        all_values = self.worksheet.get_all_values()
+                        if not all_values or len(all_values) == 0 or not ('📅' in str(all_values[0][0]) if all_values else False):
+                            from datetime import datetime
+                            today = datetime.now()
+                            date_display = f"📅 Today: {today.strftime('%d-%b-%Y')}"
+                            self.worksheet.append_row([date_display])
+                        if len(all_values) < 2:
+                            self.worksheet.append_row([
+                                "Name (नाव)",
+                                "Office Number (कार्यालय क्रमांक)",
+                                "Availability Status (उपलब्धता)"
+                            ])
                         self.worksheet.append_row([name, office_number, status_text])
                         updated_count += 1
                         logger.info(f"Added new row for {name} ({office_number})")
@@ -530,15 +602,20 @@ class GoogleSheetsSync:
             # Clear existing worksheet data
             self.worksheet.clear()
             
-            # Set up header row
+            # Set up date row (row 1) - will auto-update via formula
+            from datetime import datetime
+            today = datetime.now()
+            date_display = f"📅 Today: {today.strftime('%d-%b-%Y')}"
+            
+            # Set up header row (row 2)
             header = [
                 "Name (नाव)",
                 "Office Number (कार्यालय क्रमांक)",
                 "Availability Status (उपलब्धता)"
             ]
             
-            # Prepare all rows at once (header + data) for batch write
-            all_rows = [header]
+            # Prepare all rows at once (date row + header + data) for batch write
+            all_rows = [[date_display], header]
             for person in db_persons:
                 name = person['name'] or ""
                 office_number = person['office_number'] or ""
@@ -550,12 +627,24 @@ class GoogleSheetsSync:
             
             # Batch write all rows at once (much faster and avoids rate limits)
             self.worksheet.append_rows(all_rows)
-            rows_added = len(all_rows) - 1  # Exclude header
+            rows_added = len(all_rows) - 2  # Exclude date row and header
             
-            # Format header row (bold, background color) - simplified format
+            # Format date row (row 1)
+            try:
+                self.worksheet.format('A1:C1', {
+                    'textFormat': {'bold': True, 'fontSize': 11},
+                    'backgroundColor': {'red': 0.85, 'green': 0.9, 'blue': 0.95},
+                    'horizontalAlignment': 'CENTER'
+                })
+                # Merge cells for date display
+                self.worksheet.merge_cells('A1:C1')
+            except Exception as e:
+                logger.warning(f"Could not format date row: {e}")
+            
+            # Format header row (row 2) (bold, background color) - simplified format
             try:
                 # Make header row bold and colored (using correct API format)
-                self.worksheet.format('A1:C1', {
+                self.worksheet.format('A2:C2', {
                     'textFormat': {'bold': True},
                     'backgroundColor': {'red': 0.2, 'green': 0.4, 'blue': 0.8},
                     'horizontalAlignment': 'CENTER'
@@ -582,15 +671,15 @@ class GoogleSheetsSync:
                         'strict': True
                     }
                     
-                    # Apply validation to column C, rows 2 to num_rows+1
-                    # Note: gspread uses 1-indexed, and we need to convert column C to number (3)
-                    # We'll use batch_update for this
+                    # Apply validation to column C, rows 3 to num_rows+2
+                    # Note: Row 1 is date, Row 2 is header, data starts at Row 3
+                    # gspread uses 1-indexed, but batch_update uses 0-indexed
                     requests = [{
                         'setDataValidation': {
                             'range': {
                                 'sheetId': self.worksheet.id,
-                                'startRowIndex': 1,  # Row 2 (0-indexed, header is row 0)
-                                'endRowIndex': num_rows + 1,  # Up to last data row
+                                'startRowIndex': 2,  # Row 3 (0-indexed: row 1=date, row 2=header, row 3=data)
+                                'endRowIndex': num_rows + 2,  # Up to last data row
                                 'startColumnIndex': 2,  # Column C (0-indexed: A=0, B=1, C=2)
                                 'endColumnIndex': 3
                             },
@@ -603,10 +692,10 @@ class GoogleSheetsSync:
             except Exception as e:
                 logger.warning(f"Could not set data validation: {e}")
             
-            # Add instruction note in cell D1
+            # Add instruction note in cell D2 (next to header row)
             try:
-                self.worksheet.update('D1', '💡 Click dropdown in Status column to change availability. Changes sync every 1-2 minutes.')
-                self.worksheet.format('D1', {
+                self.worksheet.update('D2', '💡 Click dropdown in Status column to change availability. Changes sync every 1-2 minutes.')
+                self.worksheet.format('D2', {
                     'textFormat': {'italic': True, 'fontSize': 9},
                     'backgroundColor': {'red': 1.0, 'green': 0.95, 'blue': 0.8}
                 })
@@ -622,4 +711,22 @@ class GoogleSheetsSync:
         except Exception as e:
             logger.error(f"Error initializing sheet: {e}")
             return (False, f"Error: {str(e)}", 0)
+    
+    def update_date_row(self):
+        """
+        Update the date row in Google Sheet with current date.
+        This should be called periodically or when sheet is opened.
+        """
+        try:
+            from datetime import datetime
+            today = datetime.now()
+            date_display = f"📅 Today: {today.strftime('%d-%b-%Y')}"
+            
+            # Update cell A1 with date (merged across A1:C1)
+            self.worksheet.update('A1', date_display)
+            logger.info(f"Updated date row to: {date_display}")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating date row: {e}")
+            return False
 

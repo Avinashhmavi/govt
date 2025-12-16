@@ -62,6 +62,23 @@
             font-size: 16px;
         }
 
+        .date-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: inline-block;
+        }
+
+        .date-display span {
+            margin-right: 8px;
+        }
+
         .admin-controls {
             display: flex;
             justify-content: space-between;
@@ -409,6 +426,10 @@
         <div class="header">
             <h1>प्रशासक डॅशबोर्ड</h1>
             <p>कोकण भवन कार्यालय निर्देशिका - व्यक्तींचे व्यवस्थापन</p>
+            <div class="date-display" id="dateDisplay">
+                <span>📅</span>
+                <span id="currentDate"></span>
+            </div>
         </div>
 
         <div class="admin-controls">
@@ -471,6 +492,41 @@
     <script>
         let allPersons = [];
         let filteredPersons = [];
+        let lastKnownDate = null;
+
+        // Update date display with day change detection
+        function updateDateDisplay() {
+            const now = new Date();
+            const currentDate = now.toDateString(); // Get date without time
+            
+            // Check if date has changed (new day detected)
+            if (lastKnownDate && lastKnownDate !== currentDate) {
+                // Day has changed - update immediately
+                console.log('New day detected! Updating date display.');
+            }
+            
+            lastKnownDate = currentDate;
+            
+            // Update display with current date and time
+            const options = { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric',
+                weekday: 'long'
+            };
+            const dateString = now.toLocaleDateString('mr-IN', options);
+            const timeString = now.toLocaleTimeString('mr-IN', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            document.getElementById('currentDate').textContent = `आज: ${dateString} | ${timeString}`;
+        }
+
+        // Initialize date display on page load
+        updateDateDisplay();
+        
+        // Update every minute (covers midnight transition - max 60s delay)
+        setInterval(updateDateDisplay, 60000); // Update every minute
 
         // Load persons data
         function loadPersons() {

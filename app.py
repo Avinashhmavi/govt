@@ -21,6 +21,9 @@ import time
 import threading
 import logging
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 # Load environment variables
 load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -2599,6 +2602,49 @@ def init_database():
             )
         """)
         
+        # Create availability_history table for tracking all changes
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS availability_history (
+                id SERIAL PRIMARY KEY,
+                person_id INTEGER REFERENCES persons(id),
+                name VARCHAR(255),
+                office_number VARCHAR(100),
+                is_available BOOLEAN,
+                changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                change_source VARCHAR(50)
+            )
+        """)
+        
+        # Create daily_availability_snapshots table for daily snapshots
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS daily_availability_snapshots (
+                id SERIAL PRIMARY KEY,
+                person_id INTEGER REFERENCES persons(id),
+                name VARCHAR(255),
+                office_number VARCHAR(100),
+                is_available BOOLEAN,
+                snapshot_date DATE NOT NULL,
+                snapshot_time TIME DEFAULT CURRENT_TIME,
+                UNIQUE(person_id, snapshot_date)
+            )
+        """)
+        
+        # Create indexes for better query performance
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_history_person_date 
+            ON availability_history(person_id, changed_at)
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_snapshots_person_date 
+            ON daily_availability_snapshots(person_id, snapshot_date)
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_snapshots_date 
+            ON daily_availability_snapshots(snapshot_date)
+        """)
+        
         # Insert default admin user if it doesn't exist
         cursor.execute("SELECT COUNT(*) FROM admin_users WHERE username = 'admin'")
         admin_exists = cursor.fetchone()[0]
@@ -2645,6 +2691,47 @@ def init_database():
         cursor.close()
         conn.close()
         return False
+
+def log_availability_change(conn, person_id, name, office_number, is_available, change_source='admin_dashboard'):
+    """
+    Helper function to log availability changes to history tables.
+    
+    Args:
+        conn: Database connection
+        person_id: ID of the person
+        name: Person's name
+        office_number: Office number
+        is_available: New availability status
+        change_source: Source of the change ('sheet', 'admin_dashboard', 'api')
+    """
+    try:
+        cursor = conn.cursor()
+        from datetime import date
+        
+        # Insert into availability_history (every change)
+        cursor.execute("""
+            INSERT INTO availability_history (person_id, name, office_number, is_available, change_source)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (person_id, name, office_number, is_available, change_source))
+        
+        # Insert/update daily_availability_snapshots (today's snapshot)
+        today = date.today()
+        cursor.execute("""
+            INSERT INTO daily_availability_snapshots (person_id, name, office_number, is_available, snapshot_date)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (person_id, snapshot_date) 
+            DO UPDATE SET 
+                is_available = EXCLUDED.is_available,
+                snapshot_time = CURRENT_TIME,
+                name = EXCLUDED.name,
+                office_number = EXCLUDED.office_number
+        """, (person_id, name, office_number, is_available, today))
+        
+        cursor.close()
+    except Exception as e:
+        logger.error(f"Error logging availability change: {e}")
+        # Don't fail the main operation if logging fails
+        pass
 
 # Admin authentication decorator
 def admin_required(f):
@@ -2702,11 +2789,19 @@ def toggle_person(person_id):
         result = cursor.fetchone()
         
         if result:
-            new_status = not result['is_available']
+            old_status = result['is_available']
+            new_status = not old_status
+            name = result['name'] or ''
+            office_number = result['office_number'] or ''
+            
             cursor.execute(
                 "UPDATE persons SET is_available = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                 (new_status, person_id)
             )
+            
+            # Log the change to history tables
+            log_availability_change(conn, person_id, name, office_number, new_status, 'admin_dashboard')
+            
             conn.commit()
             
             # Update Google Sheet if sync is enabled
