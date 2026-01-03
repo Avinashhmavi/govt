@@ -911,6 +911,20 @@
         let timeoutIds = {};
         let isProcessing = {};
 
+        // Function to toggle fullscreen for map iframes
+        function toggleMapFullscreen(iframeId) {
+            const iframe = document.getElementById(iframeId);
+            if (iframe) {
+                if (iframe.requestFullscreen) {
+                    iframe.requestFullscreen();
+                } else if (iframe.webkitRequestFullscreen) {
+                    iframe.webkitRequestFullscreen();
+                } else if (iframe.msRequestFullscreen) {
+                    iframe.msRequestFullscreen();
+                }
+            }
+        }
+
         function openTab(tabName) {
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -966,7 +980,7 @@
                 });
             } else {
                 // If no audio, start timeout immediately with shorter duration
-                startTimeout(section, 10000); // 10 seconds for text-only results
+                startTimeout(section, 60000); // 60 seconds for text-only results
             }
             
             statusDiv.style.display = 'none';
@@ -987,7 +1001,7 @@
         function formatResult(text, roomImagePath, query, roomVideoUrl) {
             let content = '';
             let images = '';
-            let video = '';
+            let mapEmbed = '';
             
             const lines = text.split('\n');
             for (let line of lines) {
@@ -1051,29 +1065,33 @@
                 images += '</div>';
             }
             
-            // Add room video if available
-            if (roomVideoUrl) {
-                // Convert Google Drive share link to embeddable format
-                const embedUrl = roomVideoUrl.replace('/file/d/', '/file/d/').replace('/view?usp=drive_link', '/preview');
-                
-                video = `
-                    <div style="margin-top: 20px; text-align: center; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 16px; border: 2px solid #e9ecef; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);">
-                        <h4 style="color: #667eea; margin-bottom: 16px; font-size: 18px;">🎥 रूम व्हिडिओ</h4>
-                        <p style="margin-bottom: 16px; color: #6c757d; font-size: 14px;">रूम नकाशासाठी व्हिडिओ पहा</p>
-                        <div style="position: relative; width: 100%; max-width: 600px; margin: 0 auto;">
+            // Always add the interactive map instead of video
+            const mapId = 'mappedin-iframe-' + Math.random().toString(36).substr(2, 9);
+            mapEmbed = `
+                <div style="margin-top: 20px; text-align: center; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 16px; border: 2px solid #e9ecef; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);">
+                    <h4 style="color: #667eea; margin-bottom: 16px; font-size: 18px; font-weight: 600;">🗺️ इंटरॅक्टिव्ह मजला नकाशा</h4>
+                    <p style="margin-bottom: 20px; color: #6c757d; font-size: 14px;">कार्यालये आणि सुविधा शोधण्यासाठी नकाशा एक्सप्लोर करा</p>
+                    <div style="position: relative; width: 100%; max-width: 900px; margin: 0 auto;">
+                        <div style="position: relative; width: 100%; padding-bottom: 75%; height: 0; overflow: hidden; border-radius: 16px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15); border: 2px solid #e9ecef; background: #f8f9fa;">
                             <iframe 
-                                src="${embedUrl}" 
-                                width="100%" 
-                                height="400" 
-                                frameborder="0" 
-                                allowfullscreen
-                                style="border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);"
-                                allow="autoplay; encrypted-media">
+                                id="${mapId}"
+                                src="https://app.mappedin.com/map/694b9910646559000b2941ed" 
+                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; border-radius: 14px;"
+                                allow="fullscreen"
+                                allowfullscreen>
                             </iframe>
+                            <button 
+                                onclick="toggleMapFullscreen('${mapId}')"
+                                style="position: absolute; top: 12px; right: 12px; z-index: 1000; background: rgba(102, 126, 234, 0.95); backdrop-filter: blur(10px); color: white; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; gap: 6px; font-family: inherit;"
+                                onmouseover="this.style.background='rgba(102, 126, 234, 1)'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.4)';"
+                                onmouseout="this.style.background='rgba(102, 126, 234, 0.95)'; this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(0, 0, 0, 0.25)';">
+                                <span style="font-size: 16px;">⛶</span>
+                                <span>पूर्ण स्क्रीन</span>
+                            </button>
                         </div>
                     </div>
-                `;
-            }
+                </div>
+            `;
             
             // Add QR code generation button
             let qrButton = '';
@@ -1098,7 +1116,7 @@
                 `;
             }
             
-            return content.trim() + images + video + qrButton;
+            return content.trim() + images + mapEmbed + qrButton;
         }
 
         async function searchByDepartment() {
@@ -1383,7 +1401,7 @@
             });
         }
 
-        function startTimeout(section, timeoutDuration = 30000) {
+        function startTimeout(section, timeoutDuration = 90000) {
             clearTimeout(timeoutIds[section]);
             timeoutIds[section] = setTimeout(() => {
                 const resultId = `${section}Result`;

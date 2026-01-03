@@ -1,16 +1,37 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 from werkzeug.security import check_password_hash, generate_password_hash
 import pandas as pd
-from gtts import gTTS
+try:
+    from gtts import gTTS
+except ImportError:
+    print("Warning: gTTS not available, audio generation will be disabled")
+    gTTS = None
 import io
 import os
-from dotenv import load_dotenv
-from openai import OpenAI
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    print("Warning: python-dotenv not available")
+    load_dotenv = None
+try:
+    from openai import OpenAI
+except ImportError:
+    print("Warning: openai not available")
+    OpenAI = None
 import base64
-from flask_cors import CORS
+try:
+    from flask_cors import CORS
+except ImportError:
+    print("Warning: flask_cors not available")
+    CORS = None
 import re
-import qrcode
-from PIL import Image
+try:
+    import qrcode
+    from PIL import Image
+except ImportError:
+    print("Warning: qrcode/PIL not available")
+    qrcode = None
+    Image = None
 import uuid
 from datetime import datetime, timedelta
 import psycopg2
@@ -25,7 +46,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Load environment variables
-load_dotenv()
+if load_dotenv is not None:
+    try:
+        load_dotenv()
+    except Exception as e:
+        print(f"Warning: Could not load .env file: {e}")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 # Database configuration
@@ -44,12 +69,15 @@ SYNC_INTERVAL_MINUTES = float(os.getenv("SYNC_INTERVAL_MINUTES", "0.5"))  # Defa
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.secret_key = 'your-secret-key-here'  # Change this to a secure secret key
-CORS(app)  # Enable CORS for API access
+if CORS is not None:
+    CORS(app)  # Enable CORS for API access
 
 # Initialize OpenAI client (only if API key is available)
 client = None
 if openai_api_key:
     try:
+        if OpenAI is None:
+            raise Exception("OpenAI module not available")
         client = OpenAI(api_key=openai_api_key)
     except Exception as e:
         print(f"Warning: Could not initialize OpenAI client: {e}")
@@ -559,6 +587,55 @@ def get_room_video_url(room_number):
             return url
     
     return None
+
+# Mappedin map configuration
+MAPPEDIN_MAP_URL = "https://app.mappedin.com/map/694b9910646559000b2941ed"
+
+def get_mappedin_embed_html(container_id="mappedin-container", square_size="400px"):
+    """
+    Generate HTML for embedding the Mappedin map with fullscreen support.
+    
+    Args:
+        container_id: HTML element ID for the map container
+        square_size: Size for the square viewport (default 400px)
+    
+    Returns:
+        HTML string for the map embed with fullscreen toggle
+    """
+    return f"""
+    <div id="{container_id}" style="position: relative; width: 100%; max-width: 600px; margin: 0 auto;">
+        <div style="position: relative; width: 100%; padding-bottom: 100%; height: 0; overflow: hidden; border-radius: 16px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); border: 2px solid #e9ecef;">
+            <iframe 
+                id="{container_id}-iframe"
+                src="{MAPPEDIN_MAP_URL}" 
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; border-radius: 14px;"
+                allow="fullscreen"
+                allowfullscreen>
+            </iframe>
+        </div>
+        <button 
+            onclick="toggleMapFullscreen('{container_id}-iframe')"
+            style="position: absolute; top: 10px; right: 10px; z-index: 10; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: all 0.3s ease;"
+            onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 6px 16px rgba(0, 0, 0, 0.3)';"
+            onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 12px rgba(0, 0, 0, 0.2)';">
+            ⛶ पूर्ण स्क्रीन
+        </button>
+    </div>
+    <script>
+        function toggleMapFullscreen(iframeId) {{
+            const iframe = document.getElementById(iframeId);
+            if (iframe) {{
+                if (iframe.requestFullscreen) {{
+                    iframe.requestFullscreen();
+                }} else if (iframe.webkitRequestFullscreen) {{
+                    iframe.webkitRequestFullscreen();
+                }} else if (iframe.msRequestFullscreen) {{
+                    iframe.msRequestFullscreen();
+                }}
+            }}
+        }}
+    </script>
+    """
 
 # Common corrections for names
 name_corrections = {
@@ -1771,6 +1848,10 @@ def get_audio_file(text):
     if not text or not text.strip():
         return ""
     
+    # Skip audio generation if gTTS is not available
+    if gTTS is None:
+        return ""
+    
     # Create hash of text for cache key
     text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
     cache_file = os.path.join(AUDIO_CACHE_DIR, f"{text_hash}.mp3")
@@ -2276,6 +2357,8 @@ def voice_analysis():
 # QR Code generation endpoint
 @app.route('/generate_qr', methods=['POST'])
 def generate_qr():
+    if qrcode is None:
+        return jsonify({"error": "QR code generation not available (qrcode module not installed)"}), 503
     try:
         data = request.json
         query = data.get('query', '')
@@ -2457,7 +2540,7 @@ def mobile_display(session_id):
             images_str = base64.b64decode(images_b64).decode('utf-8')
             room_image_paths = images_str.split(',') if images_str else []
         
-        # Decode video URL if available
+        # Decode video URL if available (but we won't use it anymore)
         room_video_url = None
         if video_b64_encoded:
             video_b64 = urllib.parse.unquote(video_b64_encoded)
@@ -2466,31 +2549,49 @@ def mobile_display(session_id):
         # Format content for better display
         formatted_content = format_mobile_content(content)
         
-        # Generate room video HTML if video URL is available
-        room_video_html = ""
-        if room_video_url:
-            # Convert Google Drive share link to embeddable format
-            embed_url = room_video_url.replace('/file/d/', '/file/d/').replace('/view?usp=drive_link', '/preview')
-            
-            room_video_html = f"""
-                <div class='room-video' style='margin-top: 20px; text-align: center; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 16px; border: 2px solid #e9ecef; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);'>
-                    <h4 style='color: #667eea; margin-bottom: 16px; font-size: 18px;'>🎥 रूम व्हिडिओ</h4>
-                    <p style='margin-bottom: 16px; color: #6c757d; font-size: 14px;'>रूम नकाशासाठी व्हिडिओ पहा</p>
-                    <div style='position: relative; width: 100%; max-width: 100%; margin: 0 auto;'>
+        # Always show the interactive map instead of video
+        map_embed_html = f"""
+            <div class='interactive-map' style='margin-top: 20px; text-align: center; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 16px; border: 2px solid #e9ecef; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);'>
+                <h4 style='color: #667eea; margin-bottom: 16px; font-size: 18px; font-weight: 600;'>🗺️ इंटरॅक्टिव्ह मजला नकाशा</h4>
+                <p style='margin-bottom: 20px; color: #6c757d; font-size: 14px;'>कार्यालये आणि सुविधा शोधण्यासाठी नकाशा एक्सप्लोर करा</p>
+                <div style='position: relative; width: 100%; max-width: 100%; margin: 0 auto;'>
+                    <div style='position: relative; width: 100%; padding-bottom: 75%; height: 0; overflow: hidden; border-radius: 16px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15); border: 2px solid #e9ecef; background: #f8f9fa;'>
                         <iframe 
-                            src='{embed_url}' 
-                            width='100%' 
-                            height='300' 
-                            frameborder='0' 
-                            allowfullscreen
-                            style='border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);'
-                            allow='autoplay; encrypted-media'>
+                            id='mappedin-mobile-iframe'
+                            src='{MAPPEDIN_MAP_URL}' 
+                            style='position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; border-radius: 14px;'
+                            allow='fullscreen'
+                            allowfullscreen>
                         </iframe>
+                        <button 
+                            onclick="toggleMapFullscreen('mappedin-mobile-iframe')"
+                            style='position: absolute; top: 12px; right: 12px; z-index: 1000; background: rgba(102, 126, 234, 0.95); backdrop-filter: blur(10px); color: white; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; gap: 6px; font-family: inherit;'
+                            onmouseover="this.style.background='rgba(102, 126, 234, 1)'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.4)';"
+                            onmouseout="this.style.background='rgba(102, 126, 234, 0.95)'; this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(0, 0, 0, 0.25)';">
+                            <span style='font-size: 16px;'>⛶</span>
+                            <span>पूर्ण स्क्रीन</span>
+                        </button>
                     </div>
                 </div>
-            """
+            </div>
+            <script>
+                function toggleMapFullscreen(iframeId) {{
+                    const iframe = document.getElementById(iframeId);
+                    if (iframe) {{
+                        if (iframe.requestFullscreen) {{
+                            iframe.requestFullscreen();
+                        }} else if (iframe.webkitRequestFullscreen) {{
+                            iframe.webkitRequestFullscreen();
+                        }} else if (iframe.msRequestFullscreen) {{
+                            iframe.msRequestFullscreen();
+                        }}
+                    }}
+                }}
+            </script>
+        """
         
         # Generate room images HTML if image paths are available
+        room_images_html = ""
         if room_image_paths:
             room_images_html = "<div style='margin-top: 20px; text-align: center;'>"
             room_images_html += "<h4 style='color: #667eea; margin-bottom: 16px; font-size: 18px;'>🏢 मजला नकाशा</h4>"
@@ -2500,7 +2601,7 @@ def mobile_display(session_id):
                 room_images_html += f"<img src='{img_path}' alt='Floor Plan' class='floor-plan-img'>"
             room_images_html += "</div>"
         
-        return render_template('mobile_display.html', content=formatted_content, room_images=room_images_html, room_video=room_video_html)
+        return render_template('mobile_display.html', content=formatted_content, room_images=room_images_html, room_video=map_embed_html)
         
     except Exception as e:
         return render_template('mobile_display.html', 
