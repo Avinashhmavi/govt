@@ -2554,7 +2554,7 @@ def mobile_display(session_id):
             <div class='interactive-map' style='margin-top: 20px; text-align: center; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 16px; border: 2px solid #e9ecef; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);'>
                 <h4 style='color: #667eea; margin-bottom: 16px; font-size: 18px; font-weight: 600;'>🗺️ इंटरॅक्टिव्ह मजला नकाशा</h4>
                 <p style='margin-bottom: 20px; color: #6c757d; font-size: 14px;'>कार्यालये आणि सुविधा शोधण्यासाठी नकाशा एक्सप्लोर करा</p>
-                <div style='position: relative; width: 100%; max-width: 100%; margin: 0 auto;'>
+                <div id='map-container' style='position: relative; width: 100%; max-width: 100%; margin: 0 auto;'>
                     <div style='position: relative; width: 100%; padding-bottom: 75%; height: 0; overflow: hidden; border-radius: 16px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15); border: 2px solid #e9ecef; background: #f8f9fa;'>
                         <iframe 
                             id='mappedin-mobile-iframe'
@@ -2564,29 +2564,102 @@ def mobile_display(session_id):
                             allowfullscreen>
                         </iframe>
                         <button 
-                            onclick="toggleMapFullscreen('mappedin-mobile-iframe')"
+                            id='map-fullscreen-btn'
+                            onclick="toggleMapFullscreen('mappedin-mobile-iframe', 'map-container')"
                             style='position: absolute; top: 12px; right: 12px; z-index: 1000; background: rgba(102, 126, 234, 0.95); backdrop-filter: blur(10px); color: white; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; gap: 6px; font-family: inherit;'
                             onmouseover="this.style.background='rgba(102, 126, 234, 1)'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.4)';"
                             onmouseout="this.style.background='rgba(102, 126, 234, 0.95)'; this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(0, 0, 0, 0.25)';">
                             <span style='font-size: 16px;'>⛶</span>
-                            <span>पूर्ण स्क्रीन</span>
+                            <span id='fullscreen-btn-text'>पूर्ण स्क्रीन</span>
                         </button>
                     </div>
                 </div>
             </div>
             <script>
-                function toggleMapFullscreen(iframeId) {{
+                function toggleMapFullscreen(iframeId, containerId) {{
                     const iframe = document.getElementById(iframeId);
-                    if (iframe) {{
-                        if (iframe.requestFullscreen) {{
-                            iframe.requestFullscreen();
-                        }} else if (iframe.webkitRequestFullscreen) {{
-                            iframe.webkitRequestFullscreen();
-                        }} else if (iframe.msRequestFullscreen) {{
-                            iframe.msRequestFullscreen();
+                    const container = document.getElementById(containerId);
+                    const btnText = document.getElementById('fullscreen-btn-text');
+                    
+                    if (!iframe) return;
+
+                    // iOS Safari doesn't support requestFullscreen on elements
+                    // Check if we are already in our custom fallback fullscreen mode
+                    const isCustomFullscreen = container.classList.contains('custom-fullscreen');
+
+                    if (isCustomFullscreen) {{
+                        // Exit custom fullscreen
+                        container.classList.remove('custom-fullscreen');
+                        container.style.position = 'relative';
+                        container.style.width = '100%';
+                        container.style.height = 'auto';
+                        container.style.top = 'auto';
+                        container.style.left = 'auto';
+                        container.style.zIndex = 'auto';
+                        container.style.background = 'transparent';
+                        
+                        // Reset iframe container
+                        const iframeContainer = container.firstElementChild;
+                        iframeContainer.style.paddingBottom = '75%';
+                        iframeContainer.style.height = '0';
+                        iframeContainer.style.borderRadius = '16px';
+                        
+                        if (btnText) btnText.textContent = 'पूर्ण स्क्रीन';
+                        document.body.style.overflow = 'auto';
+                    }} else if (document.fullscreenElement) {{
+                         if (document.exitFullscreen) {{
+                            document.exitFullscreen();
+                        }} else if (document.webkitExitFullscreen) {{
+                            document.webkitExitFullscreen();
+                        }}
+                    }} else {{
+                        // Try standard fullscreen first
+                        let requestMethod = iframe.requestFullscreen || iframe.webkitRequestFullscreen || iframe.mozRequestFullScreen || iframe.msRequestFullscreen;
+                        
+                        if (requestMethod) {{
+                            requestMethod.call(iframe).catch(err => {{
+                                // Fallback to custom CSS fullscreen if standard fails
+                                enterCustomFullscreen(container, btnText);
+                            }});
+                        }} else {{
+                            // Fallback for iOS / other browsers
+                            enterCustomFullscreen(container, btnText);
                         }}
                     }}
                 }}
+                
+                function enterCustomFullscreen(container, btnText) {{
+                    container.classList.add('custom-fullscreen');
+                    container.style.position = 'fixed';
+                    container.style.top = '0';
+                    container.style.left = '0';
+                    container.style.width = '100%';
+                    container.style.height = '100%';
+                    container.style.zIndex = '9999';
+                    container.style.background = 'white';
+                    
+                    // Adjust iframe container to fill
+                    const iframeContainer = container.firstElementChild;
+                    iframeContainer.style.paddingBottom = '0';
+                    iframeContainer.style.height = '100%';
+                    iframeContainer.style.borderRadius = '0';
+                    
+                    if (btnText) btnText.textContent = 'बंद करा';
+                    document.body.style.overflow = 'hidden';
+                }}
+                
+                // Listen for standard fullscreen changes to update button text if needed
+                 document.addEventListener('fullscreenchange', exitHandler);
+                 document.addEventListener('webkitfullscreenchange', exitHandler);
+                 document.addEventListener('mozfullscreenchange', exitHandler);
+                 document.addEventListener('MSFullscreenChange', exitHandler);
+
+                 function exitHandler() {{
+                     const btnText = document.getElementById('fullscreen-btn-text');
+                     if (!document.fullscreenElement && !document.webkitIsFullScreen && !document.mozFullScreen && !document.msFullscreenElement) {{
+                         if (btnText) btnText.textContent = 'पूर्ण स्क्रीन';
+                     }}
+                 }}
             </script>
         """
         
